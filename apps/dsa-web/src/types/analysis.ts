@@ -21,7 +21,7 @@ export interface ReportMeta {
   queryId: string;
   stockCode: string;
   stockName: string;
-  reportType: 'simple' | 'detailed';
+  reportType: 'simple' | 'detailed' | 'full' | 'brief';
   createdAt: string;
   currentPrice?: number;
   changePct?: number;
