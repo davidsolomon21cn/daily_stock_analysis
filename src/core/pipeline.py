@@ -16,7 +16,7 @@ import time
 import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional, Tuple
 
 import pandas as pd
@@ -133,7 +133,8 @@ class StockAnalysisPipeline:
     def fetch_and_save_stock_data(
         self, 
         code: str,
-        force_refresh: bool = False
+        force_refresh: bool = False,
+        current_time: Optional[datetime] = None,
     ) -> Tuple[bool, Optional[str]]:
         """
         获取并保存单只股票数据
@@ -146,6 +147,7 @@ class StockAnalysisPipeline:
         Args:
             code: 股票代码
             force_refresh: 是否强制刷新（忽略本地缓存）
+            current_time: 本轮运行冻结的参考时间，用于统一断点续传目标交易日判断
             
         Returns:
             Tuple[是否成功, 错误信息]
@@ -155,7 +157,9 @@ class StockAnalysisPipeline:
             # 首先获取股票名称
             stock_name = self.fetcher_manager.get_stock_name(code)
 
-            target_date = self._resolve_resume_target_date(code)
+            target_date = self._resolve_resume_target_date(
+                code, current_time=current_time
+            )
 
             # 断点续传检查：如果最新可复用交易日的数据已存在，则跳过
             if not force_refresh and self.db.has_today_data(code, target_date):
@@ -1094,6 +1098,7 @@ class StockAnalysisPipeline:
         single_stock_notify: bool = False,
         report_type: ReportType = ReportType.SIMPLE,
         analysis_query_id: Optional[str] = None,
+        current_time: Optional[datetime] = None,
     ) -> Optional[AnalysisResult]:
         """
         处理单只股票的完整流程
@@ -1112,6 +1117,7 @@ class StockAnalysisPipeline:
             skip_analysis: 是否跳过 AI 分析
             single_stock_notify: 是否启用单股推送模式（每分析完一只立即推送）
             report_type: 报告类型枚举（从配置读取，Issue #119）
+            current_time: 本轮运行冻结的参考时间，用于统一断点续传目标交易日判断
 
         Returns:
             AnalysisResult 或 None
@@ -1120,7 +1126,9 @@ class StockAnalysisPipeline:
         
         try:
             # Step 1: 获取并保存数据
-            success, error = self.fetch_and_save_stock_data(code)
+            success, error = self.fetch_and_save_stock_data(
+                code, current_time=current_time
+            )
             
             if not success:
                 logger.warning(f"[{code}] 数据获取失败: {error}")
@@ -1212,6 +1220,9 @@ class StockAnalysisPipeline:
         logger.info(f"===== 开始分析 {len(stock_codes)} 只股票 =====")
         logger.info(f"股票列表: {', '.join(stock_codes)}")
         logger.info(f"并发数: {self.max_workers}, 模式: {'仅获取数据' if dry_run else '完整分析'}")
+
+        # 冻结本轮运行的统一参考时间，避免跨市场收盘边界时同批股票使用不同目标交易日。
+        resume_reference_time = datetime.now(timezone.utc)
         
         # === 批量预取实时行情（优化：避免每只股票都触发全量拉取）===
         # 只有股票数量 >= 5 时才进行预取，少量股票直接逐个查询更高效
@@ -1255,6 +1266,7 @@ class StockAnalysisPipeline:
                     single_stock_notify=single_stock_notify and send_notification,
                     report_type=report_type,  # Issue #119: 传递报告类型
                     analysis_query_id=uuid.uuid4().hex,
+                    current_time=resume_reference_time,
                 ): code
                 for code in stock_codes
             }
@@ -1288,7 +1300,12 @@ class StockAnalysisPipeline:
             success_count = sum(
                 1
                 for code in stock_codes
-                if self.db.has_today_data(code, self._resolve_resume_target_date(code))
+                if self.db.has_today_data(
+                    code,
+                    self._resolve_resume_target_date(
+                        code, current_time=resume_reference_time
+                    ),
+                )
             )
             fail_count = len(stock_codes) - success_count
         else:

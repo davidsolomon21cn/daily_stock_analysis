@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Regression tests for pipeline data-fetch error handling."""
 
-from datetime import date
+from datetime import date, datetime, timezone
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -33,11 +33,17 @@ class PipelineFetchErrorTestCase(unittest.TestCase):
         pipeline.db = MagicMock()
         pipeline.fetcher_manager.get_stock_name.return_value = "贵州茅台"
         pipeline.db.has_today_data.return_value = True
+        current_time = datetime(2026, 3, 28, 1, 0, tzinfo=timezone.utc)
 
-        success, error = StockAnalysisPipeline.fetch_and_save_stock_data(pipeline, "600519")
+        success, error = StockAnalysisPipeline.fetch_and_save_stock_data(
+            pipeline,
+            "600519",
+            current_time=current_time,
+        )
 
         self.assertTrue(success)
         self.assertIsNone(error)
+        _mock_target.assert_called_once_with("600519", current_time=current_time)
         pipeline.db.has_today_data.assert_called_once_with("600519", date(2026, 3, 27))
         pipeline.fetcher_manager.get_daily_data.assert_not_called()
 
