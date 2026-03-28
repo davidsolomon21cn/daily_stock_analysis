@@ -231,6 +231,14 @@ def test_sanitize_llm_log_preview_redacts_single_quoted_credential_fields():
         ("Authorization: Basic dXNlcjpwYXNz", "Authorization=Basic [REDACTED]"),
         ("Authorization: Token abc123", "Authorization=Token [REDACTED]"),
         (
+            'Authorization: Signature keyId="abc",algorithm="hmac-sha256",signature="xyz"',
+            "Authorization=Signature [REDACTED]",
+        ),
+        (
+            "Authorization: Bearer token extra=leak",
+            "Authorization=Bearer [REDACTED]",
+        ),
+        (
             "Authorization: AWS4-HMAC-SHA256 Credential=AKIA..., Signature=deadbeef",
             "Authorization=AWS4-HMAC-SHA256 [REDACTED]",
         ),
