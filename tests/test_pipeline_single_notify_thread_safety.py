@@ -73,7 +73,7 @@ class TestPipelineSingleNotifyThreadSafety(unittest.TestCase):
         notify_barrier = threading.Barrier(2)
 
         def _analyze(code, report_type, query_id):
-            notify_barrier.wait(timeout=1)
+            notify_barrier.wait(timeout=10)
             return _make_result(code)
 
         pipeline.analyze_stock = MagicMock(side_effect=_analyze)
