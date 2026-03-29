@@ -78,6 +78,8 @@ This document compiles common issues encountered by users and their solutions.
 1. Go to repo `Settings` → `Secrets and variables` → `Actions`
 2. **Secrets** (click `New repository secret`): Store sensitive information
    - `GEMINI_API_KEY`
+   - `DEEPSEEK_API_KEY`
+   - `AIHUBMIX_KEY`
    - `OPENAI_API_KEY`
    - `TELEGRAM_BOT_TOKEN`
    - Various Webhook URLs
@@ -85,6 +87,9 @@ This document compiles common issues encountered by users and their solutions.
    - `STOCK_LIST`
    - `GEMINI_MODEL`
    - `REPORT_TYPE`
+   - `LLM_CHANNELS`, `LLM_{NAME}_BASE_URL`, `LLM_{NAME}_MODELS`
+
+If you run `LLM_CHANNELS=deepseek,aihubmix` in GitHub Actions, you do not need to put real `LLM_DEEPSEEK_API_KEY` / `LLM_AIHUBMIX_API_KEY` values into the default `.env`. Put the real keys in `DEEPSEEK_API_KEY` and `AIHUBMIX_KEY` (or `OPENAI_API_KEY`) instead. Custom channel names should still use `LITELLM_CONFIG` + `LITELLM_CONFIG_YAML`.
 
 ---
 
@@ -128,7 +133,7 @@ PROXY_PORT=10809
 
 **Q: Configured both GEMINI_API_KEY and LLM_CHANNELS, why does it only use channels?**
 
-The system uses exactly one mode by priority: advanced YAML routing (`LITELLM_CONFIG`) > `LLM_CHANNELS` > legacy keys. However, YAML routing only takes effect when the file can be parsed successfully and yields a non-empty `model_list`; if the YAML path is invalid or the content is empty, the system automatically falls back to `LLM_CHANNELS` or legacy keys. Once a tier is active, lower-priority tiers are not used.
+The system uses exactly one mode by priority: advanced YAML routing (`LITELLM_CONFIG`) > `LLM_CHANNELS` > legacy keys. YAML routing only takes effect when the file parses successfully and yields a non-empty `model_list`; otherwise it falls back automatically. Well-known channel names such as `deepseek`, `aihubmix`, `openai`, `gemini`, and `anthropic` can safely fall back to matching legacy Secrets (e.g. `DEEPSEEK_API_KEY`) when `LLM_{NAME}_API_KEY(S)` is absent, which is useful for GitHub Actions. Custom channel names do not auto-fallback.
 
 **Q: test_env says no usable AI model is configured, what should I do?**
 
@@ -136,7 +141,7 @@ Start with one provider and its API key. If you want to pin a primary model, add
 
 **Q: How to use multiple models at once (e.g. AIHubmix + DeepSeek + Gemini)?**
 
-Use channel mode: set `LLM_CHANNELS=aihubmix,deepseek,gemini` and configure each channel's `LLM_{NAME}_BASE_URL`, `LLM_{NAME}_API_KEY`, `LLM_{NAME}_MODELS`. You can also configure this visually in Web Settings → AI Model → AI Model Access.
+Use channel mode: set `LLM_CHANNELS=aihubmix,deepseek,gemini` and configure each channel's `LLM_{NAME}_BASE_URL` and `LLM_{NAME}_MODELS`; for local / Docker add `LLM_{NAME}_API_KEY(S)` directly, while in GitHub Actions you can keep using `AIHUBMIX_KEY`, `DEEPSEEK_API_KEY`, and `GEMINI_API_KEY` for the real secrets. You can also configure visually in Web Settings → AI Model → Channel Editor.
 
 ---
 

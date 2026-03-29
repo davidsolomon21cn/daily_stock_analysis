@@ -78,6 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] 飞书群机器人通知现在支持 `FEISHU_WEBHOOK_SECRET` / `FEISHU_WEBHOOK_KEYWORD`，并在 Web 设置与文档中明确区分 Webhook 推送和 `FEISHU_APP_ID` / `FEISHU_APP_SECRET` 应用模式，降低误配导致的推送失败。
 - [改进] 🤖 **普通分析链路支持 LiteLLM 流式生成与更细任务进度** — 常规股票分析在 LLM 阶段会优先尝试 `stream=True` 并在服务端累积 chunk，首页任务 SSE 新增 `task_progress` 事件与更细的 `message/progress` 更新；仅在最终 JSON 解析成功后才持久化历史报告，不支持流式的 provider 会在首个 chunk 前自动回退到原非流式调用。
 - [新功能] Web AI 模型配置支持按渠道调用 `/models` 获取可用模型，并在渠道编辑器中以多选方式写回 `LLM_{CHANNEL}_MODELS`，获取失败时仍保留手动输入作为降级路径。
+- [修复] `LLM_CHANNELS` 现在会在常见 provider 渠道缺少 `LLM_{NAME}_API_KEY(S)` 时，安全回退读取匹配的 legacy Secrets（如 `DEEPSEEK_API_KEY`、`AIHUBMIX_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`ANTHROPIC_API_KEY`），让 GitHub Actions 可继续使用默认 `.env` 的非敏感渠道结构。
+- [文档] 更新中英文 LLM 配置指南与 FAQ，补充 GitHub Actions 下渠道模式复用 legacy Secrets 的用法，并明确自定义渠道仍建议使用 `LITELLM_CONFIG` + `LITELLM_CONFIG_YAML`。
 
 ## [3.11.0] - 2026-03-27
 
