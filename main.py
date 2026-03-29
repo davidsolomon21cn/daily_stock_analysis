@@ -77,7 +77,7 @@ def _read_active_env_values() -> Optional[Dict[str, str]]:
         values = dotenv_values(env_path)
     except Exception as exc:  # pragma: no cover - defensive branch
         logger.warning("读取配置文件 %s 失败，继续沿用当前环境变量: %s", env_path, exc)
-        return {}
+        return None
 
     return {
         str(key): "" if value is None else str(value)
@@ -580,8 +580,8 @@ def _resolve_scheduled_stock_codes(stock_codes: Optional[List[str]]) -> Optional
 
 def _reload_runtime_config() -> Config:
     """Reload config from the latest persisted `.env` values for scheduled runs."""
-    Config.reset_instance()
     _reload_env_file_values_preserving_overrides()
+    Config.reset_instance()
     return get_config()
 
 
