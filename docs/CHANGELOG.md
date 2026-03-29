@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [测试] 🧪 **补充前端变更验证命令** — 对应前端资源变更同步执行 `cd apps/dsa-web && npm ci && npm run lint && npm run build`，作为版本信息展示与 Docker 重建生效验证的最小验证闭环记录。
 - [修复] 内置定时调度器现在会在运行中感知 WebUI 保存后的 `SCHEDULE_TIME` 变化，并在下一轮检查时重绑 daily job，避免 `python main.py --serve --schedule` 仍固定按启动时的 `18:00` 触发；`.env.example` 也同步删除了重复的定时任务配置示例。
 - [修复] 🪟 **Windows Release 渠道编辑器保留 MiniMax 模型前缀** — 渠道模式下填写 `minimax/<模型名>` 时，后端归一化与 Web 设置页运行时模型列表都会保留该值原样，不再误改写成 `openai/minimax/<模型名>`，从而恢复 MiniMax 模型在 Win 客户端里的保存、选择与使用。
+### 修复
+
+- 📨 **单股推送模式不再并发复用共享通知实例** — `StockAnalysisPipeline.run()` 现在会保留个股分析并发，但把 `SINGLE_STOCK_NOTIFY=true` 下的即时通知挪到结果收集侧串行发送；同时 `_send_single_stock_notification()` 为同一个 pipeline 实例补上实例级临界区，避免直接调用 `process_single_stock(..., single_stock_notify=True)` 时多个线程继续共享同一个 `NotificationService` 进入报告生成与发送链路，导致通知乱序、重复发送或状态污染。
 
 ## [3.11.0] - 2026-03-27
 
