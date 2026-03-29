@@ -1,16 +1,23 @@
 # -*- coding: utf-8 -*-
 """Regression tests for realtime quote fallback logging semantics."""
 
+import importlib.util
 import logging
 import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from tests.litellm_stub import ensure_litellm_stub
 
-if "litellm" not in sys.modules:
-    sys.modules["litellm"] = MagicMock()
-if "json_repair" not in sys.modules:
+ensure_litellm_stub()
+
+try:
+    json_repair_available = importlib.util.find_spec("json_repair") is not None
+except ValueError:
+    json_repair_available = "json_repair" in sys.modules
+
+if not json_repair_available and "json_repair" not in sys.modules:
     sys.modules["json_repair"] = MagicMock()
 
 from data_provider.base import DataFetcherManager
