@@ -253,10 +253,14 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
         self.assertTrue(config.schedule_run_immediately)
 
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
-    def test_runtime_mutable_keys_preserve_process_env_overrides_on_first_load(
+    def test_runtime_mutable_keys_prefer_env_file_over_stale_process_env(
         self,
         _mock_parse_yaml,
     ) -> None:
+        """When both process env and .env contain a WEBUI-mutable key with
+        different values, the persisted .env must win.  This matches the Docker
+        restart path: container env may be stale while .env was updated by WebUI.
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             env_path = Path(temp_dir) / ".env"
             env_path.write_text(
@@ -287,11 +291,37 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
             ):
                 config = Config._load_from_env()
 
+        # .env values win over stale process env for WEBUI-mutable keys
+        self.assertEqual(config.stock_list, ["300750", "TSLA"])
+        self.assertTrue(config.schedule_enabled)
+        self.assertEqual(config.schedule_time, "09:30")
+        self.assertFalse(config.run_immediately)
+        self.assertTrue(config.schedule_run_immediately)
+
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_runtime_mutable_keys_use_process_env_when_absent_from_file(
+        self,
+        _mock_parse_yaml,
+    ) -> None:
+        """When a WEBUI-mutable key exists only in process env (not in .env),
+        it IS a genuine explicit override and must be honoured.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_path = Path(temp_dir) / ".env"
+            # .env has no STOCK_LIST or SCHEDULE_* keys at all
+            env_path.write_text("LOG_LEVEL=INFO\n", encoding="utf-8")
+
+            with patch.dict(
+                os.environ,
+                {
+                    "ENV_FILE": str(env_path),
+                    "STOCK_LIST": "600519,000001",
+                },
+                clear=True,
+            ):
+                config = Config._load_from_env()
+
         self.assertEqual(config.stock_list, ["600519", "000001"])
-        self.assertFalse(config.schedule_enabled)
-        self.assertEqual(config.schedule_time, "18:00")
-        self.assertTrue(config.run_immediately)
-        self.assertFalse(config.schedule_run_immediately)
 
     def test_parse_report_language_accepts_known_alias_without_warning(self) -> None:
         with self.assertNoLogs("src.config", level="WARNING"):

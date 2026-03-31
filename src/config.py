@@ -1701,7 +1701,14 @@ class Config:
 
     @classmethod
     def _capture_bootstrap_runtime_env_overrides(cls) -> None:
-        """Remember process-provided runtime env overrides before dotenv mutates os.environ."""
+        """Remember process-provided runtime env overrides before dotenv mutates os.environ.
+
+        Only keys present in `os.environ` but **absent** from the persisted `.env`
+        file are treated as explicit overrides.  A mere value mismatch (env ≠ file)
+        is *not* enough: in Docker the container may carry stale env vars from a
+        previous run while `.env` has already been updated by WebUI, so the
+        persisted file must win in that case.
+        """
         if cls._BOOTSTRAP_RUNTIME_ENV_OVERRIDES_CAPTURED:
             return
 
@@ -1712,7 +1719,7 @@ class Config:
                 continue
 
             file_value = cls._get_env_file_value(key)
-            if file_value is None or env_value != file_value:
+            if file_value is None:
                 explicit_overrides.add(key)
 
         cls._BOOTSTRAP_RUNTIME_ENV_OVERRIDES = frozenset(explicit_overrides)
