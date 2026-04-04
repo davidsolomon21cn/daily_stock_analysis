@@ -183,7 +183,7 @@ interface ChannelRowProps {
   onToggleExpand: (index: number) => void;
   onToggleKeyVisibility: (index: number, nextVisible: boolean) => void;
   onTest: (channel: ChannelConfig, index: number) => void;
-  onDiscoverModels: (channel: ChannelConfig, index: number) => void;
+  onDiscoverModels: (channel: ChannelConfig) => void;
 }
 
 const ChannelRow: React.FC<ChannelRowProps> = ({
@@ -357,7 +357,7 @@ const ChannelRow: React.FC<ChannelRowProps> = ({
                 size="sm"
                 className="px-3 text-[11px] shadow-none"
                 disabled={busy}
-                onClick={() => onDiscoverModels(channel, index)}
+                onClick={() => onDiscoverModels(channel)}
               >
                 {discoveryState?.status === 'loading' ? '获取中...' : '获取模型'}
               </Button>
@@ -826,7 +826,7 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
     });
     if (field !== 'models' && field !== 'enabled') {
       setDiscoveryStates((previous) => {
-        const channel = channels.find((item, itemIndex) => itemIndex === index);
+        const channel = channels.find((_, itemIndex) => itemIndex === index);
         if (!channel || !(channel.id in previous)) {
           return previous;
         }
@@ -987,7 +987,7 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
     }
   };
 
-  const handleDiscoverModels = async (channel: ChannelConfig, index: number) => {
+  const handleDiscoverModels = async (channel: ChannelConfig) => {
     const requestId = discoveryRequestIdRef.current + 1;
     discoveryRequestIdRef.current = requestId;
     discoveryNonceRef.current[channel.id] = requestId;
@@ -1141,7 +1141,7 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
                 onToggleExpand={toggleExpand}
                 onToggleKeyVisibility={toggleKeyVisibility}
                 onTest={(ch, idx) => void handleTest(ch, idx)}
-                onDiscoverModels={(ch, idx) => void handleDiscoverModels(ch, idx)}
+                onDiscoverModels={(channel) => void handleDiscoverModels(channel)}
               />
             ))}
           </div>

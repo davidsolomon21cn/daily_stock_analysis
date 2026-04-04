@@ -209,9 +209,9 @@ describe('LLMChannelEditor', () => {
   });
 
   it('does not apply stale discovery response after channel list re-sync', async () => {
-    let firstResolver: ((value: unknown) => void) | null = null;
+    let resolvePendingFirst!: (value: unknown) => void;
     const pendingFirst = new Promise((resolve) => {
-      firstResolver = resolve;
+      resolvePendingFirst = resolve;
     });
 
     discoverLLMChannelModels
@@ -273,7 +273,7 @@ describe('LLMChannelEditor', () => {
 
     expect(screen.getByLabelText('手动模型（逗号分隔）')).toHaveValue('dash-old,dashscope-plus');
 
-    firstResolver?.({
+    resolvePendingFirst({
       success: true,
       message: 'LLM channel model discovery succeeded',
       error: null,
