@@ -422,9 +422,9 @@ class LLMToolAdapter:
 
         return self._parse_litellm_response(response, model)
 
-    def _get_temperature(self, model: str) -> float:
-        """Return unified temperature from config."""
-        return normalize_litellm_temperature(model, self._config.llm_temperature)
+    def _get_temperature(self, _model: str) -> float:
+        """Return the raw configured temperature before per-model normalization."""
+        return float(self._config.llm_temperature)
 
     def _convert_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert internal message format to OpenAI-compatible format for litellm."""

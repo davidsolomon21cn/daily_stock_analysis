@@ -298,7 +298,7 @@ class LLMChannelConfigTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
-    def test_kimi_k26_forces_supported_temperature(self, _mock_parse_yaml, _mock_setup_env) -> None:
+    def test_kimi_k26_keeps_raw_configured_temperature(self, _mock_parse_yaml, _mock_setup_env) -> None:
         env = {
             "OPENAI_API_KEY": "sk-test-value",
             "OPENAI_MODEL": "kimi-k2.6",
@@ -309,7 +309,7 @@ class LLMChannelConfigTestCase(unittest.TestCase):
             config = Config._load_from_env()
 
         self.assertEqual(config.litellm_model, "openai/kimi-k2.6")
-        self.assertAlmostEqual(config.llm_temperature, 1.0)
+        self.assertAlmostEqual(config.llm_temperature, 0.7)
 
     def test_kimi_k26_temperature_normalization_handles_provider_wrappers(self) -> None:
         self.assertAlmostEqual(get_fixed_litellm_temperature("moonshot/kimi-k2.6"), 1.0)

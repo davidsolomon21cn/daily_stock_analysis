@@ -632,6 +632,28 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         self.assertEqual(payload["resolved_protocol"], "ollama")
         self.assertEqual(payload["resolved_model"], "ollama/llama3")
 
+    @patch("litellm.completion")
+    def test_test_llm_channel_normalizes_kimi_temperature(self, mock_completion) -> None:
+        mock_completion.return_value = type(
+            "MockResponse",
+            (),
+            {
+                "choices": [type("Choice", (), {"message": type("Message", (), {"content": "OK"})()})()],
+            },
+        )()
+
+        payload = self.service.test_llm_channel(
+            name="primary",
+            protocol="openai",
+            base_url="https://api.moonshot.cn/v1",
+            api_key="sk-test-value",
+            models=["kimi-k2.6"],
+        )
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["resolved_model"], "openai/kimi-k2.6")
+        self.assertEqual(mock_completion.call_args.kwargs["temperature"], 1.0)
+
     @patch("src.services.system_config_service.requests.get")
     def test_discover_llm_channel_models_returns_deduped_ids(self, mock_get) -> None:
         mock_response = Mock()

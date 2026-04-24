@@ -22,6 +22,7 @@ from src.config import (
     channel_allows_empty_api_key,
     get_configured_llm_models,
     normalize_agent_litellm_model,
+    normalize_litellm_temperature,
     normalize_news_strategy_profile,
     normalize_llm_channel_model,
     parse_env_bool,
@@ -415,7 +416,7 @@ class SystemConfigService:
         call_kwargs: Dict[str, Any] = {
             "model": resolved_model,
             "messages": [{"role": "user", "content": "Reply with OK"}],
-            "temperature": 0,
+            "temperature": normalize_litellm_temperature(resolved_model, 0),
             "max_tokens": 256,  # Increased to allow MiniMax-M2.7 thinking process + response
             "timeout": max(5.0, float(timeout_seconds)),
         }

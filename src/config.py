@@ -318,11 +318,11 @@ def normalize_litellm_temperature(model: str, temperature: Optional[float], *, d
 
 
 def resolve_unified_llm_temperature(model: str) -> float:
-    """Resolve the unified LLM temperature with backward-compatible fallbacks."""
+    """Resolve the raw unified LLM temperature with backward-compatible fallbacks."""
     llm_temperature_raw = os.getenv("LLM_TEMPERATURE")
     if llm_temperature_raw and llm_temperature_raw.strip():
         try:
-            return normalize_litellm_temperature(model, float(llm_temperature_raw))
+            return float(llm_temperature_raw)
         except (ValueError, TypeError):
             pass
 
@@ -338,7 +338,7 @@ def resolve_unified_llm_temperature(model: str) -> float:
         preferred_value = os.getenv(preferred_env)
         if preferred_value and preferred_value.strip():
             try:
-                return normalize_litellm_temperature(model, float(preferred_value))
+                return float(preferred_value)
             except (ValueError, TypeError):
                 pass
 
@@ -346,11 +346,11 @@ def resolve_unified_llm_temperature(model: str) -> float:
         env_value = os.getenv(env_name)
         if env_value and env_value.strip():
             try:
-                return normalize_litellm_temperature(model, float(env_value))
+                return float(env_value)
             except (ValueError, TypeError):
                 continue
 
-    return normalize_litellm_temperature(model, 0.7)
+    return 0.7
 
 
 def _get_litellm_provider(model: str) -> str:
