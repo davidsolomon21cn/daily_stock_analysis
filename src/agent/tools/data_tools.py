@@ -10,9 +10,9 @@ Tools:
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date
 from threading import Lock
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.agent.tools.registry import ToolParameter, ToolDefinition
 
@@ -22,23 +22,6 @@ _fetcher_manager_singleton = None
 _fetcher_manager_lock = Lock()
 _DAILY_HISTORY_DEFAULT_DAYS = 60
 _DAILY_HISTORY_MAX_DAYS = 365
-_DAILY_HISTORY_CACHE_MIN_RECORDS = 30
-_DAILY_HISTORY_RECORD_FIELDS = (
-    "code",
-    "date",
-    "open",
-    "high",
-    "low",
-    "close",
-    "volume",
-    "amount",
-    "pct_chg",
-    "ma5",
-    "ma10",
-    "ma20",
-    "volume_ratio",
-    "data_source",
-)
 
 
 def _get_fetcher_manager():
@@ -115,117 +98,6 @@ def _history_code_candidates(stock_code: str) -> Tuple[List[str], str]:
         if candidate and candidate not in candidates:
             candidates.append(candidate)
     return candidates, normalized_code
-
-
-def _coerce_daily_date(value: Any) -> Optional[date]:
-    if isinstance(value, date) and not isinstance(value, datetime):
-        return value
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, str):
-        try:
-            return datetime.strptime(value[:10], "%Y-%m-%d").date()
-        except ValueError:
-            return None
-    if hasattr(value, "date"):
-        try:
-            return value.date()
-        except Exception:
-            return None
-    return None
-
-
-def _resolve_history_target_date(stock_code: str) -> date:
-    from data_provider.base import normalize_stock_code
-    from src.core.trading_calendar import get_effective_trading_date, get_market_for_stock
-
-    normalized = normalize_stock_code(str(stock_code or "").strip())
-    market = get_market_for_stock(normalized)
-    return get_effective_trading_date(market)
-
-
-def _daily_rows_to_records(rows: Sequence[Any]) -> List[Dict[str, Any]]:
-    """Convert StockDaily rows into the existing tool record shape."""
-    ordered = sorted(
-        rows,
-        key=lambda row: _coerce_daily_date(getattr(row, "date", None)) or date.min,
-    )
-    records: List[Dict[str, Any]] = []
-    for row in ordered:
-        payload = row.to_dict() if hasattr(row, "to_dict") else dict(row)
-        record = {
-            field: payload.get(field)
-            for field in _DAILY_HISTORY_RECORD_FIELDS
-            if field in payload
-        }
-        if "date" in record:
-            record["date"] = str(record["date"])
-        records.append(record)
-    return records
-
-
-def _select_cached_daily_rows(
-    stock_code: str,
-    effective_days: int,
-) -> Tuple[Optional[str], List[Any]]:
-    """Return the best cache candidate rows without merging code variants."""
-    candidates, normalized_code = _history_code_candidates(stock_code)
-    if not candidates:
-        return None, []
-
-    db = _get_db()
-    best_code = None
-    best_rows: List[Any] = []
-    best_key = None
-
-    for candidate in candidates:
-        rows = list(db.get_latest_data(candidate, effective_days) or [])
-        if not rows:
-            continue
-        latest_date = max(
-            (_coerce_daily_date(getattr(row, "date", None)) or date.min)
-            for row in rows
-        )
-        key = (latest_date, candidate == normalized_code, len(rows))
-        if best_key is None or key > best_key:
-            best_key = key
-            best_code = candidate
-            best_rows = rows
-
-    return best_code, best_rows
-
-
-def _get_cached_daily_history(stock_code: str, effective_days: int) -> Optional[dict]:
-    try:
-        cached_code, rows = _select_cached_daily_rows(stock_code, effective_days)
-        if not cached_code or not rows:
-            return None
-
-        latest_date = max(
-            (_coerce_daily_date(getattr(row, "date", None)) or date.min)
-            for row in rows
-        )
-        target_date = _resolve_history_target_date(stock_code)
-        required_records = min(effective_days, _DAILY_HISTORY_CACHE_MIN_RECORDS)
-
-        if latest_date < target_date or len(rows) < required_records:
-            return None
-
-        records = _daily_rows_to_records(rows)
-        return {
-            "code": cached_code,
-            "source": "db_cache",
-            "cache_hit": True,
-            "requested_days": effective_days,
-            "effective_days": effective_days,
-            "actual_records": len(records),
-            "partial_cache": len(records) < effective_days,
-            "total_records": len(records),
-            "data": records,
-        }
-    except Exception as exc:
-        logger.warning("Agent daily history cache lookup failed for %s: %s", stock_code, exc)
-        return None
 
 
 def _append_history_metadata(response: dict, metadata: Dict[str, Any]) -> dict:
@@ -419,12 +291,8 @@ def _handle_get_daily_history(stock_code: str, days: int = 60) -> dict:
     """Get daily OHLCV history data."""
     effective_days, metadata = _normalize_history_days(days)
 
-    cached = _get_cached_daily_history(stock_code, effective_days)
-    if cached is not None:
-        return _append_history_metadata(cached, metadata)
-
-    manager = _get_fetcher_manager()
-    df, source = manager.get_daily_data(stock_code, days=effective_days)
+    from src.services.history_loader import load_history_df
+    df, source = load_history_df(stock_code, days=effective_days)
 
     if df is None or df.empty:
         return _append_history_metadata(
@@ -432,21 +300,22 @@ def _handle_get_daily_history(stock_code: str, days: int = 60) -> dict:
             metadata,
         )
 
-    _, normalized_code = _history_code_candidates(stock_code)
-    try:
-        saved_count = _get_db().save_daily_data(df, normalized_code, source)
-        logger.info(
-            "Agent daily history persisted for %s (source=%s, new_records=%s)",
-            normalized_code,
-            source,
-            saved_count,
-        )
-    except Exception as exc:
-        logger.warning(
-            "Agent daily history persistence failed for %s: %s",
-            normalized_code,
-            exc,
-        )
+    if source != "db_cache":
+        _, normalized_code = _history_code_candidates(stock_code)
+        try:
+            saved_count = _get_db().save_daily_data(df, normalized_code, source)
+            logger.info(
+                "Agent daily history persisted for %s (source=%s, new_records=%s)",
+                normalized_code,
+                source,
+                saved_count,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Agent daily history persistence failed for %s: %s",
+                normalized_code,
+                exc,
+            )
 
     # Convert DataFrame to list of dicts (last N records)
     records = df.tail(min(effective_days, len(df))).to_dict(orient="records")
@@ -455,14 +324,18 @@ def _handle_get_daily_history(stock_code: str, days: int = 60) -> dict:
         if "date" in r:
             r["date"] = str(r["date"])
 
+    response_code = stock_code
+    if source == "db_cache" and records:
+        response_code = records[-1].get("code") or response_code
+
     return _append_history_metadata({
-        "code": stock_code,
+        "code": response_code,
         "source": source,
-        "cache_hit": False,
+        "cache_hit": source == "db_cache",
         "requested_days": effective_days,
         "effective_days": effective_days,
         "actual_records": len(records),
-        "partial_cache": False,
+        "partial_cache": source == "db_cache" and len(records) < effective_days,
         "total_records": len(records),
         "data": records,
     }, metadata)
