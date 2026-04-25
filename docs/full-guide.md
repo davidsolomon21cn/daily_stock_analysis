@@ -1016,7 +1016,11 @@ python main.py --debug
 
 ---
 
-## FastAPI API 服务
+## 本地 WebUI 管理界面
+
+WebUI 与 FastAPI API 服务共用同一服务进程，启动后可在浏览器中完成配置管理、手动分析、任务进度查看、历史报告、回测、持仓管理和智能导入等操作。认证、云服务器访问和 API 调用细节见下方说明。
+
+### FastAPI API 服务
 
 FastAPI 提供 RESTful API 服务，支持配置管理和触发分析。
 
