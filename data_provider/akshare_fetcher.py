@@ -938,12 +938,21 @@ class AkshareFetcher(BaseFetcher):
 
     def get_hot_stocks(self, n: int = 5) -> Optional[List[Dict[str, Any]]]:
         """基于东财全市场实时行情构建热门股票榜。"""
+        circuit_breaker = get_realtime_circuit_breaker()
+        source_key = "akshare_em"
         df = self._get_stock_realtime_dataframe_em()
         if df is None or df.empty:
             return None
 
         required_cols = ['代码', '名称', '涨跌幅', '成交额']
         if any(col not in df.columns for col in required_cols):
+            missing_cols = [col for col in required_cols if col not in df.columns]
+            error_message = (
+                "hot_stocks schema missing required columns: "
+                + ", ".join(missing_cols)
+            )
+            logger.info(f"[API错误] 解析热门股票(akshare_em)失败: {error_message}")
+            circuit_breaker.record_failure(source_key, error_message)
             return None
 
         work_df = df[required_cols + (['换手率'] if '换手率' in df.columns else [])].copy()

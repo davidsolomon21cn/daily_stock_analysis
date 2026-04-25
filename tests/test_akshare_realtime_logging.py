@@ -193,6 +193,23 @@ def test_hot_stocks_skips_full_market_request_when_circuit_breaker_open(monkeypa
     assert hot_stocks is None
 
 
+def test_hot_stocks_records_circuit_breaker_failure_on_schema_drift(monkeypatch, akshare_fetcher):
+    breaker = _DummyCircuitBreaker()
+    malformed_df = SimpleNamespace(columns=["涨跌幅", "成交额"], empty=False)
+    monkeypatch.setattr("data_provider.akshare_fetcher.get_realtime_circuit_breaker", lambda: breaker)
+    monkeypatch.setattr(akshare_fetcher, "_get_stock_realtime_dataframe_em", lambda: malformed_df)
+
+    hot_stocks = akshare_fetcher.get_hot_stocks()
+
+    assert hot_stocks is None
+    assert breaker.failures
+    source_key, message = breaker.failures[0]
+    assert source_key == "akshare_em"
+    assert "hot_stocks schema missing required columns" in str(message)
+    assert "代码" in str(message)
+    assert "名称" in str(message)
+
+
 def test_em_realtime_parse_error_records_circuit_breaker_failure(monkeypatch, akshare_fetcher):
     breaker = _DummyCircuitBreaker()
     monkeypatch.setattr("data_provider.akshare_fetcher.get_realtime_circuit_breaker", lambda: breaker)
