@@ -3,6 +3,7 @@ import { createParsedApiError, getParsedApiError, type ParsedApiError } from '..
 import { systemConfigApi, SystemConfigConflictError, SystemConfigValidationError } from '../api/systemConfig';
 import type {
   ConfigValidationIssue,
+  SetupWizardStatus,
   SystemConfigCategorySchema,
   SystemConfigItem,
   SystemConfigUpdateItem,
@@ -68,6 +69,7 @@ export function useSystemConfig() {
   const [configVersion, setConfigVersion] = useState<string>('');
   const [maskToken, setMaskToken] = useState<string>('******');
   const [serverItems, setServerItems] = useState<SystemConfigItem[]>([]);
+  const [setupStatus, setSetupStatus] = useState<SetupWizardStatus | null>(null);
 
   // UI state
   const [draftValues, setDraftValues] = useState<Record<string, string>>({});
@@ -222,6 +224,7 @@ export function useSystemConfig() {
     try {
       const config = await systemConfigApi.getConfig(true);
       applyServerPayload(config.items, config.configVersion, config.maskToken);
+      setSetupStatus(config.setupStatus);
       setToast(null);
       return true;
     } catch (error: unknown) {
@@ -260,6 +263,7 @@ export function useSystemConfig() {
         preserveDirty: true,
         committedKeys,
       });
+      setSetupStatus(config.setupStatus);
     },
     [applyServerPayload],
   );
@@ -383,6 +387,7 @@ export function useSystemConfig() {
     configVersion,
     maskToken,
     serverItems,
+    setupStatus,
     categories,
     itemsByCategory,
     issueByKey,

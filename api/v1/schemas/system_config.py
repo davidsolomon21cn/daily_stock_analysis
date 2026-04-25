@@ -191,6 +191,7 @@ class TestLLMChannelResponse(BaseModel):
     message: str
     error: Optional[str] = None
     error_type: Optional[str] = None
+    resolved_protocol: Optional[str] = None
     resolved_model: Optional[str] = None
     latency_ms: Optional[int] = None
     next_step: Optional[str] = None

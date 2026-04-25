@@ -172,6 +172,22 @@ const baseCategories = [
 ];
 
 type ConfigState = {
+  serverItems: Array<Record<string, unknown>>;
+  setupStatus: {
+    isComplete: boolean;
+    readyForSmoke: boolean;
+    requiredMissingKeys: string[];
+    nextStepKey: string | null;
+    checks: Array<{
+      key: string;
+      title: string;
+      category: string;
+      required: boolean;
+      status: string;
+      message: string;
+      nextAction?: string | null;
+    }>;
+  } | null;
   categories: Array<{ category: string; title: string; description: string; displayOrder: number; fields: [] }>;
   itemsByCategory: Record<string, Array<Record<string, unknown>>>;
   issueByKey: Record<string, unknown[]>;
@@ -200,90 +216,100 @@ type ConfigState = {
 type ConfigOverride = Partial<ConfigState>;
 
 function buildSystemConfigState(overrides: ConfigOverride = {}) {
-  return {
-    categories: baseCategories,
-    itemsByCategory: {
-      system: [
-        {
+  const itemsByCategory = overrides.itemsByCategory ?? {
+    system: [
+      {
+        key: 'ADMIN_AUTH_ENABLED',
+        value: 'true',
+        rawValueExists: true,
+        isMasked: false,
+        schema: {
           key: 'ADMIN_AUTH_ENABLED',
-          value: 'true',
-          rawValueExists: true,
-          isMasked: false,
-          schema: {
-            key: 'ADMIN_AUTH_ENABLED',
-            category: 'system',
-            dataType: 'boolean',
-            uiControl: 'switch',
-            isSensitive: false,
-            isRequired: false,
-            isEditable: true,
-            options: [],
-            validation: {},
-            displayOrder: 1,
-          },
+          category: 'system',
+          dataType: 'boolean',
+          uiControl: 'switch',
+          isSensitive: false,
+          isRequired: false,
+          isEditable: true,
+          options: [],
+          validation: {},
+          displayOrder: 1,
         },
-      ],
-      base: [
-        {
+      },
+    ],
+    base: [
+      {
+        key: 'STOCK_LIST',
+        value: 'SH600000',
+        rawValueExists: true,
+        isMasked: false,
+        schema: {
           key: 'STOCK_LIST',
-          value: 'SH600000',
-          rawValueExists: true,
-          isMasked: false,
-          schema: {
-            key: 'STOCK_LIST',
-            category: 'base',
-            dataType: 'string',
-            uiControl: 'textarea',
-            isSensitive: false,
-            isRequired: false,
-            isEditable: true,
-            options: [],
-            validation: {},
-            displayOrder: 1,
-          },
+          category: 'base',
+          dataType: 'string',
+          uiControl: 'textarea',
+          isSensitive: false,
+          isRequired: false,
+          isEditable: true,
+          options: [],
+          validation: {},
+          displayOrder: 1,
         },
-      ],
-      ai_model: [
-        {
+      },
+    ],
+    ai_model: [
+      {
+        key: 'LLM_CHANNELS',
+        value: 'primary',
+        rawValueExists: true,
+        isMasked: false,
+        schema: {
           key: 'LLM_CHANNELS',
-          value: 'primary',
-          rawValueExists: true,
-          isMasked: false,
-          schema: {
-            key: 'LLM_CHANNELS',
-            category: 'ai_model',
-            dataType: 'string',
-            uiControl: 'textarea',
-            isSensitive: false,
-            isRequired: false,
-            isEditable: true,
-            options: [],
-            validation: {},
-            displayOrder: 1,
-          },
+          category: 'ai_model',
+          dataType: 'string',
+          uiControl: 'textarea',
+          isSensitive: false,
+          isRequired: false,
+          isEditable: true,
+          options: [],
+          validation: {},
+          displayOrder: 1,
         },
-      ],
-      agent: [
-        {
+      },
+    ],
+    agent: [
+      {
+        key: 'AGENT_ORCHESTRATOR_TIMEOUT_S',
+        value: '600',
+        rawValueExists: true,
+        isMasked: false,
+        schema: {
           key: 'AGENT_ORCHESTRATOR_TIMEOUT_S',
-          value: '600',
-          rawValueExists: true,
-          isMasked: false,
-          schema: {
-            key: 'AGENT_ORCHESTRATOR_TIMEOUT_S',
-            category: 'agent',
-            dataType: 'integer',
-            uiControl: 'number',
-            isSensitive: false,
-            isRequired: false,
-            isEditable: true,
-            options: [],
-            validation: {},
-            displayOrder: 1,
-          },
+          category: 'agent',
+          dataType: 'integer',
+          uiControl: 'number',
+          isSensitive: false,
+          isRequired: false,
+          isEditable: true,
+          options: [],
+          validation: {},
+          displayOrder: 1,
         },
-      ],
+      },
+    ],
+  };
+  const serverItems = Object.values(itemsByCategory).flat();
+  return {
+    serverItems,
+    setupStatus: {
+      isComplete: true,
+      readyForSmoke: true,
+      requiredMissingKeys: [],
+      nextStepKey: null,
+      checks: [],
     },
+    categories: baseCategories,
+    itemsByCategory,
     issueByKey: {},
     activeCategory: 'system',
     setActiveCategory,
@@ -377,6 +403,43 @@ describe('SettingsPage', () => {
     expect(screen.getByText('3.11.0')).toBeInTheDocument();
     expect(screen.getByText('build-20260329-021530Z')).toBeInTheDocument();
     expect(screen.getByText('2026-03-29T02:15:30.000Z')).toBeInTheDocument();
+  });
+
+  it('renders the first-run setup card in settings even after the home prompt was dismissed', async () => {
+    localStorage.setItem('dsa-first-run-setup-dismissed', '1');
+    useSystemConfigMock.mockReturnValue(buildSystemConfigState({
+      setupStatus: {
+        isComplete: false,
+        readyForSmoke: false,
+        requiredMissingKeys: ['llm_primary', 'stock_list'],
+        nextStepKey: 'llm_primary',
+        checks: [
+          {
+            key: 'llm_primary',
+            title: 'LLM 主渠道',
+            category: 'ai_model',
+            required: true,
+            status: 'needs_action',
+            message: '尚未检测到可用的主模型配置',
+            nextAction: '请先配置主模型',
+          },
+          {
+            key: 'stock_list',
+            title: '自选股',
+            category: 'base',
+            required: true,
+            status: 'needs_action',
+            message: '当前自选股列表为空',
+            nextAction: '请先添加股票',
+          },
+        ],
+      },
+    }));
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByRole('heading', { name: '首次启动最小配置' })).toBeInTheDocument();
+    expect(screen.getByText('基础配置尚未完成')).toBeInTheDocument();
   });
 
   it('renders desktop app version in system settings during desktop runtime', async () => {

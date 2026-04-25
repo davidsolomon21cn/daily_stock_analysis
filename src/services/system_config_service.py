@@ -140,6 +140,48 @@ class SystemConfigService:
         ]
         return bool(current_segments) and len(masked_segments) == len(current_segments)
 
+    @staticmethod
+    def _merge_masked_sensitive_value(
+        value: str,
+        mask_token: str,
+        *,
+        current_value: Optional[str] = None,
+    ) -> Optional[str]:
+        """Merge masked placeholder segments with the currently persisted secret value."""
+        if current_value in (None, ""):
+            return None
+
+        current_segments = [
+            segment.strip()
+            for segment in str(current_value).split(",")
+        ]
+        current_populated_segments = [segment for segment in current_segments if segment]
+
+        if value == mask_token:
+            if len(current_populated_segments) != 1:
+                return None
+            return current_populated_segments[0]
+
+        if "," not in value:
+            return None
+
+        submitted_segments = [segment.strip() for segment in value.split(",")]
+        merged_segments: List[str] = []
+        replaced_any = False
+        for index, segment in enumerate(submitted_segments):
+            if segment != mask_token:
+                merged_segments.append(segment)
+                continue
+            if index >= len(current_segments) or not current_segments[index]:
+                return None
+            merged_segments.append(current_segments[index])
+            replaced_any = True
+
+        if not replaced_any:
+            return None
+
+        return ",".join(merged_segments)
+
     def _read_persisted_config_map(self) -> Dict[str, str]:
         """Read persisted `.env` values without mutating runtime state."""
         raw_config = self._manager.read_config_map()
@@ -566,7 +608,8 @@ class SystemConfigService:
         errors = [issue for issue in validation_issues if issue["severity"] == "error"]
         if errors:
             stages[0] = self._stage("validation", "配置校验", "failed", errors[0]["message"])
-            return self._llm_test_payload(False, "LLM channel configuration is invalid", error=errors[0]["message"], error_type="invalid_config", resolved_model=None, latency_ms=None, next_step="请先补全渠道的 API Key、协议和模型配置", stages=stages)
+            resolved_protocol = resolve_llm_channel_protocol(protocol, base_url=base_url, models=raw_models, channel_name=name)
+            return self._llm_test_payload(False, "LLM channel configuration is invalid", error=errors[0]["message"], error_type="invalid_config", resolved_protocol=resolved_protocol or None, resolved_model=None, latency_ms=None, next_step="请先补全渠道的 API Key、协议和模型配置", stages=stages)
         stages[0] = self._stage("validation", "配置校验", "success", "渠道配置格式有效")
 
         resolved_protocol = resolve_llm_channel_protocol(protocol, base_url=base_url, models=raw_models, channel_name=name)
@@ -623,16 +666,16 @@ class SystemConfigService:
 
             if not content:
                 stages[3] = self._stage("response_parse", "响应解析", "failed", "返回内容为空，无法确认模型输出")
-                return self._llm_test_payload(False, "LLM channel returned an empty response", error="Empty response", error_type="empty_response", resolved_model=resolved_model, latency_ms=latency_ms, next_step="请检查模型权限、额度或切换到另一个可用模型后重试", stages=stages)
+                return self._llm_test_payload(False, "LLM channel returned an empty response", error="Empty response", error_type="empty_response", resolved_protocol=resolved_protocol or None, resolved_model=resolved_model, latency_ms=latency_ms, next_step="请检查模型权限、额度或切换到另一个可用模型后重试", stages=stages)
             stages[3] = self._stage("response_parse", "响应解析", "success", "已成功解析模型返回内容")
-            return self._llm_test_payload(True, "LLM channel test succeeded", error=None, error_type=None, resolved_model=resolved_model, latency_ms=latency_ms, next_step=None, stages=stages)
+            return self._llm_test_payload(True, "LLM channel test succeeded", error=None, error_type=None, resolved_protocol=resolved_protocol or None, resolved_model=resolved_model, latency_ms=latency_ms, next_step=None, stages=stages)
         except Exception as exc:
             sanitized_error = self._sanitize_error_text(str(exc), secrets=[selected_api_key])
             error_type = self._classify_llm_error(sanitized_error)
             logger.warning("LLM channel test failed for %s: %s", channel_name, sanitized_error)
             stages[2] = self._stage("chat", "聊天接口", "failed", sanitized_error)
             stages[3] = self._stage("response_parse", "响应解析", "skipped", "接口请求未完成，未进入解析阶段")
-            return self._llm_test_payload(False, "LLM channel test failed", error=sanitized_error, error_type=error_type, resolved_model=resolved_model, latency_ms=None, next_step=self._suggest_llm_next_step(error_type), stages=stages)
+            return self._llm_test_payload(False, "LLM channel test failed", error=sanitized_error, error_type=error_type, resolved_protocol=resolved_protocol or None, resolved_model=resolved_model, latency_ms=None, next_step=self._suggest_llm_next_step(error_type), stages=stages)
 
     def update(
         self,
@@ -663,6 +706,13 @@ class SystemConfigService:
             submitted_keys.add(key)
             if bool(field_schema.get("is_sensitive", False)):
                 sensitive_keys.add(key)
+                merged_sensitive_value = self._merge_masked_sensitive_value(
+                    normalized_value,
+                    mask_token,
+                    current_value=current_map.get(key),
+                )
+                if merged_sensitive_value is not None:
+                    normalized_value = merged_sensitive_value
                 if self._is_masked_placeholder_value(
                     normalized_value,
                     mask_token,
@@ -848,9 +898,19 @@ class SystemConfigService:
             ) and current_map.get(key):
                 continue
 
+            normalized_value = value
+            if is_sensitive:
+                merged_sensitive_value = self._merge_masked_sensitive_value(
+                    value,
+                    mask_token,
+                    current_value=current_map.get(key),
+                )
+                if merged_sensitive_value is not None:
+                    normalized_value = merged_sensitive_value
+
             updated_map[key] = value
-            effective_map[key] = value
-            issues.extend(self._validate_value(key=key, value=value, field_schema=field_schema))
+            effective_map[key] = normalized_value
+            issues.extend(self._validate_value(key=key, value=normalized_value, field_schema=field_schema))
 
         issues.extend(self._validate_cross_field(effective_map=effective_map, updated_keys=set(updated_map.keys())))
         return issues
@@ -956,18 +1016,23 @@ class SystemConfigService:
         mask_token: str,
         models: Sequence[str] = (),
     ) -> str:
+        current_map = self._read_persisted_config_map()
+        resolved_saved_api_key = self._resolve_masked_request_api_key(
+            channel_name=channel_name,
+            protocol=protocol,
+            current_map=current_map,
+            models=models,
+        )
+        merged_api_key = self._merge_masked_sensitive_value(
+            api_key,
+            mask_token,
+            current_value=resolved_saved_api_key,
+        )
+        if merged_api_key is not None:
+            return merged_api_key
         if not self._is_masked_placeholder_value(api_key, mask_token):
             return api_key
-        current_map = self._read_persisted_config_map()
-        return (
-            self._resolve_masked_request_api_key(
-                channel_name=channel_name,
-                protocol=protocol,
-                current_map=current_map,
-                models=models,
-            )
-            or api_key
-        )
+        return resolved_saved_api_key or api_key
 
     @classmethod
     def _api_key_candidates_for_provider(cls, provider_name: str) -> List[str]:
@@ -1017,8 +1082,8 @@ class SystemConfigService:
         return {"key": key, "title": title, "status": status, "detail": detail}
 
     @staticmethod
-    def _llm_test_payload(success: bool, message: str, *, error: Optional[str], error_type: Optional[str], resolved_model: Optional[str], latency_ms: Optional[int], next_step: Optional[str], stages: List[Dict[str, str]]) -> Dict[str, Any]:
-        return {"success": success, "message": message, "error": error, "error_type": error_type, "resolved_model": resolved_model, "latency_ms": latency_ms, "next_step": next_step, "stages": stages}
+    def _llm_test_payload(success: bool, message: str, *, error: Optional[str], error_type: Optional[str], resolved_protocol: Optional[str], resolved_model: Optional[str], latency_ms: Optional[int], next_step: Optional[str], stages: List[Dict[str, str]]) -> Dict[str, Any]:
+        return {"success": success, "message": message, "error": error, "error_type": error_type, "resolved_protocol": resolved_protocol, "resolved_model": resolved_model, "latency_ms": latency_ms, "next_step": next_step, "stages": stages}
 
     @staticmethod
     def _smoke_payload(success: bool, message: str, *, error_code: Optional[str], next_step: Optional[str], resolved_stock_code: Optional[str], summary: str, setup_status: Dict[str, Any]) -> Dict[str, Any]:

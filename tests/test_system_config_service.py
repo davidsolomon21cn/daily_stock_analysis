@@ -376,7 +376,7 @@ class SystemConfigServiceTestCase(unittest.TestCase):
 
         self.assertTrue(response["success"])
         self.assertEqual(response["applied_count"], 1)
-        self.assertEqual(response["skipped_masked_count"], 1)
+        self.assertEqual(response["skipped_masked_count"], 0)
         self.assertIn("STOCK_LIST", response["updated_keys"])
 
         current_map = self.manager.read_config_map()
@@ -406,11 +406,40 @@ class SystemConfigServiceTestCase(unittest.TestCase):
 
         self.assertTrue(response["success"])
         self.assertEqual(response["applied_count"], 1)
-        self.assertEqual(response["skipped_masked_count"], 1)
+        self.assertEqual(response["skipped_masked_count"], 0)
 
         current_map = self.manager.read_config_map()
         self.assertEqual(current_map["LLM_PRIMARY_API_KEYS"], "sk-first,sk-second")
         self.assertEqual(current_map["STOCK_LIST"], "600519,300750")
+
+    def test_update_merges_structured_masked_multi_key_secret_with_new_entries(self) -> None:
+        self._rewrite_env(
+            "LLM_CHANNELS=primary",
+            "LLM_PRIMARY_PROTOCOL=openai",
+            "LLM_PRIMARY_API_KEYS=sk-first,sk-second",
+            "LLM_PRIMARY_MODELS=gpt-4o-mini",
+        )
+        payload = self.service.get_config(include_schema=False)
+        item_map = {item["key"]: item for item in payload["items"]}
+
+        response = self.service.update(
+            config_version=payload["config_version"],
+            items=[
+                {
+                    "key": "LLM_PRIMARY_API_KEYS",
+                    "value": f"{item_map['LLM_PRIMARY_API_KEYS']['value']},sk-third",
+                },
+            ],
+            mask_token="******",
+            reload_now=False,
+        )
+
+        self.assertTrue(response["success"])
+        self.assertEqual(response["applied_count"], 1)
+        self.assertEqual(response["skipped_masked_count"], 0)
+
+        current_map = self.manager.read_config_map()
+        self.assertEqual(current_map["LLM_PRIMARY_API_KEYS"], "sk-first,sk-second,sk-third")
 
     def test_validate_reports_invalid_time(self) -> None:
         validation = self.service.validate(items=[{"key": "SCHEDULE_TIME", "value": "25:70"}])

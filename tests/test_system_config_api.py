@@ -144,11 +144,50 @@ class SystemConfigApiTestCase(unittest.TestCase):
         ).model_dump()
 
         self.assertEqual(payload["applied_count"], 1)
-        self.assertEqual(payload["skipped_masked_count"], 1)
+        self.assertEqual(payload["skipped_masked_count"], 0)
 
         env_content = self.env_path.read_text(encoding="utf-8")
         self.assertIn("LLM_PRIMARY_API_KEYS=sk-first,sk-second", env_content)
         self.assertIn("STOCK_LIST=600519,300750", env_content)
+
+    def test_put_config_merges_structured_masked_multi_key_secret_with_new_entries(self) -> None:
+        self.env_path.write_text(
+            "\n".join(
+                [
+                    "LLM_CHANNELS=primary",
+                    "LLM_PRIMARY_PROTOCOL=openai",
+                    "LLM_PRIMARY_API_KEYS=sk-first,sk-second",
+                    "LLM_PRIMARY_MODELS=gpt-4o-mini",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.manager = ConfigManager(env_path=self.env_path)
+        self.service = SystemConfigService(manager=self.manager)
+        current = system_config.get_system_config(include_schema=False, service=self.service).model_dump()
+        item_map = {item["key"]: item for item in current["items"]}
+
+        payload = system_config.update_system_config(
+            request=UpdateSystemConfigRequest(
+                config_version=current["config_version"],
+                mask_token="******",
+                reload_now=False,
+                items=[
+                    {
+                        "key": "LLM_PRIMARY_API_KEYS",
+                        "value": f"{item_map['LLM_PRIMARY_API_KEYS']['value']},sk-third",
+                    },
+                ],
+            ),
+            service=self.service,
+        ).model_dump()
+
+        self.assertEqual(payload["applied_count"], 1)
+        self.assertEqual(payload["skipped_masked_count"], 0)
+
+        env_content = self.env_path.read_text(encoding="utf-8")
+        self.assertIn("LLM_PRIMARY_API_KEYS=sk-first,sk-second,sk-third", env_content)
 
     def test_put_config_returns_conflict_when_version_is_stale(self) -> None:
         with self.assertRaises(HTTPException) as context:
@@ -336,6 +375,7 @@ class SystemConfigApiTestCase(unittest.TestCase):
                 "message": "LLM channel test succeeded",
                 "error": None,
                 "error_type": None,
+                "resolved_protocol": "openai",
                 "resolved_model": "openai/gpt-4o-mini",
                 "latency_ms": 123,
                 "next_step": None,
@@ -355,6 +395,7 @@ class SystemConfigApiTestCase(unittest.TestCase):
             ).model_dump()
 
         self.assertTrue(payload["success"])
+        self.assertEqual(payload["resolved_protocol"], "openai")
         self.assertEqual(payload["resolved_model"], "openai/gpt-4o-mini")
         mock_test.assert_called_once()
         self.assertEqual(mock_test.call_args.kwargs["mask_token"], "******")

@@ -169,6 +169,7 @@ export interface TestLLMChannelResponse {
   message: string;
   error?: string | null;
   errorType?: string | null;
+  resolvedProtocol?: string | null;
   resolvedModel?: string | null;
   latencyMs?: number | null;
   nextStep?: string | null;

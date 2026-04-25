@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth, useSystemConfig } from '../hooks';
 import { createParsedApiError, getParsedApiError, type ParsedApiError } from '../api/error';
 import { systemConfigApi } from '../api/systemConfig';
@@ -16,8 +16,19 @@ import {
   SettingsSectionCard,
 } from '../components/settings';
 import { WEB_BUILD_INFO } from '../utils/constants';
+import {
+  buildSetupLLMPayload,
+  looksLikeStockCode,
+  MAX_SETUP_STOCKS,
+  splitCsv,
+} from '../utils/setupWizard';
 import { getCategoryDescriptionZh } from '../utils/systemConfigI18n';
-import type { SystemConfigCategory } from '../types/systemConfig';
+import type {
+  SetupSmokeRunResponse,
+  SetupWizardStatus,
+  SystemConfigCategory,
+  TestLLMChannelResponse,
+} from '../types/systemConfig';
 
 type DesktopWindow = Window & {
   dsaDesktop?: {
@@ -184,7 +195,18 @@ const SettingsPage: React.FC = () => {
     refreshAfterExternalSave,
     configVersion,
     maskToken,
+    setupStatus,
   } = useSystemConfig();
+
+  const [setupStocks, setSetupStocks] = useState<string[]>([]);
+  const [setupStockInput, setSetupStockInput] = useState('');
+  const [setupStockError, setSetupStockError] = useState('');
+  const [isSavingSetupStocks, setIsSavingSetupStocks] = useState(false);
+  const [isTestingSetupLLM, setIsTestingSetupLLM] = useState(false);
+  const [setupLLMResult, setSetupLLMResult] = useState<TestLLMChannelResponse | null>(null);
+  const [isRunningSetupSmoke, setIsRunningSetupSmoke] = useState(false);
+  const [setupSmokeResult, setSetupSmokeResult] = useState<SetupSmokeRunResponse | null>(null);
+  const [setupStatusOverride, setSetupStatusOverride] = useState<SetupWizardStatus | null>(null);
 
   useEffect(() => {
     void load();
@@ -249,6 +271,17 @@ const SettingsPage: React.FC = () => {
   }, [canCheckDesktopUpdate, desktopRuntimeApi]);
 
   const rawActiveItems = itemsByCategory[activeCategory] || [];
+  const allConfigItems = useMemo(() => Object.values(itemsByCategory).flat(), [itemsByCategory]);
+  const effectiveSetupStatus = setupStatusOverride ?? setupStatus;
+  const shouldShowSetupCard = Boolean(effectiveSetupStatus && !effectiveSetupStatus.isComplete);
+  const setupStockListValue = useMemo(
+    () => String(allConfigItems.find((item) => item.key === 'STOCK_LIST')?.value || ''),
+    [allConfigItems],
+  );
+  const setupLLMPayload = useMemo(
+    () => buildSetupLLMPayload(allConfigItems, maskToken),
+    [allConfigItems, maskToken],
+  );
   const rawActiveItemMap = new Map(rawActiveItems.map((item) => [item.key, String(item.value ?? '')]));
   const hasConfiguredChannels = Boolean((rawActiveItemMap.get('LLM_CHANNELS') || '').trim());
   const hasLitellmConfig = Boolean((rawActiveItemMap.get('LITELLM_CONFIG') || '').trim());
@@ -304,6 +337,14 @@ const SettingsPage: React.FC = () => {
         ? rawActiveItems.filter((item) => !AGENT_HIDDEN_KEYS.has(item.key))
       : rawActiveItems;
   const desktopActionDisabled = isLoading || isSaving || isExportingEnv || isImportingEnv;
+
+  useEffect(() => {
+    setSetupStocks(splitCsv(setupStockListValue));
+  }, [setupStockListValue]);
+
+  useEffect(() => {
+    setSetupStatusOverride(null);
+  }, [setupStatus]);
 
   const downloadDesktopEnv = async () => {
     setDesktopActionError(null);
@@ -409,6 +450,109 @@ const SettingsPage: React.FC = () => {
 
   const desktopUpdateNotice = getDesktopUpdateNotice(desktopUpdateState);
 
+  const addSetupStock = (code: string, _name?: string, source?: 'manual' | 'autocomplete') => {
+    const normalized = code.trim();
+    if (!normalized) return;
+    if (source !== 'autocomplete' && !looksLikeStockCode(normalized)) {
+      setSetupStockError('名称输入请先从候选列表确认，避免写入错误股票。');
+      return;
+    }
+    setSetupStocks((current) => {
+      if (current.some((item) => item.toLowerCase() === normalized.toLowerCase())) return current;
+      if (current.length >= MAX_SETUP_STOCKS) return current;
+      return [...current, normalized];
+    });
+    setSetupStockInput('');
+    setSetupStockError('');
+    setSetupSmokeResult(null);
+  };
+
+  const saveSetupStocks = async () => {
+    if (!setupStocks.length) {
+      setSetupStockError('请先添加至少 1 只股票。');
+      return;
+    }
+
+    setIsSavingSetupStocks(true);
+    try {
+      await systemConfigApi.update({
+        configVersion,
+        maskToken,
+        reloadNow: true,
+        items: [{ key: 'STOCK_LIST', value: setupStocks.join(',') }],
+      });
+      await refreshAfterExternalSave(['STOCK_LIST']);
+      setSetupStockError('');
+      setSetupSmokeResult(null);
+    } catch (error: unknown) {
+      setSetupStockError(getParsedApiError(error).message || '保存股票失败');
+    } finally {
+      setIsSavingSetupStocks(false);
+    }
+  };
+
+  const testSetupLLM = async () => {
+    if (!setupLLMPayload) {
+      setSetupLLMResult({
+        success: false,
+        message: '未检测到可测试的主模型配置',
+        error: '请先在当前页面补齐 LLM 配置',
+        errorType: 'invalid_config',
+        nextStep: '先完成 AI 模型配置，再回到顶部卡片重试',
+        stages: [],
+      });
+      return;
+    }
+
+    setIsTestingSetupLLM(true);
+    try {
+      setSetupLLMResult(await systemConfigApi.testLLMChannel(setupLLMPayload));
+    } catch (error: unknown) {
+      const parsed = getParsedApiError(error);
+      setSetupLLMResult({
+        success: false,
+        message: 'LLM 测试失败',
+        error: parsed.message,
+        errorType: 'network_error',
+        nextStep: '请检查当前页面中的渠道配置',
+        stages: [],
+      });
+    } finally {
+      setIsTestingSetupLLM(false);
+    }
+  };
+
+  const runSetupSmoke = async () => {
+    setIsRunningSetupSmoke(true);
+    try {
+      const result = await systemConfigApi.runSetupSmoke({
+        stockInput: setupStocks[0] || setupStockInput,
+      });
+      setSetupSmokeResult(result);
+      setSetupStatusOverride(result.setupStatus);
+    } catch (error: unknown) {
+      const parsed = getParsedApiError(error);
+      const fallbackStatus = effectiveSetupStatus || {
+        isComplete: false,
+        readyForSmoke: false,
+        requiredMissingKeys: [],
+        nextStepKey: null,
+        checks: [],
+      };
+      setSetupSmokeResult({
+        success: false,
+        message: '首次试跑失败',
+        errorCode: 'network_error',
+        nextStep: '请稍后重试',
+        summary: parsed.message,
+        setupStatus: fallbackStatus,
+      });
+      setSetupStatusOverride(fallbackStatus);
+    } finally {
+      setIsRunningSetupSmoke(false);
+    }
+  };
+
   return (
     <div className="settings-page min-h-full px-4 pb-6 pt-4 md:px-6">
       <div className="mb-5 rounded-[1.5rem] border settings-border bg-card/94 px-5 py-5 shadow-soft-card-strong backdrop-blur-sm">
@@ -475,6 +619,132 @@ const SettingsPage: React.FC = () => {
           </aside>
 
           <section className="space-y-4">
+            {shouldShowSetupCard && effectiveSetupStatus ? (
+              <SettingsSectionCard
+                title="首次启动最小配置"
+                description="即使首页入口已被关闭，这里仍可继续测试当前 LLM、保存试跑股票并执行 dry-run。"
+              >
+                <div className="space-y-3 rounded-2xl border border-amber-400/25 bg-amber-50/70 px-4 py-4 dark:bg-amber-500/10">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">基础配置尚未完成</p>
+                      <p className="mt-1 text-xs leading-6 text-muted-text">
+                        还缺 {effectiveSetupStatus.requiredMissingKeys.length} 项关键配置：
+                        {effectiveSetupStatus.checks
+                          .filter((check) => effectiveSetupStatus.requiredMissingKeys.includes(check.key))
+                          .map((check) => check.title)
+                          .join('、') || '请先补齐配置'}
+                        。
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border settings-border bg-background/60 px-3 py-3 text-xs leading-6 text-secondary-text">
+                    {effectiveSetupStatus.checks.map((check) => `${check.title}：${check.message}`).join(' / ')}
+                  </div>
+                  <div className="grid gap-3 xl:grid-cols-[1.1fr_1fr]">
+                    <div className="rounded-xl border settings-border bg-background/60 px-3 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-xs text-secondary-text">
+                          <p className="font-medium text-foreground">LLM 一键测试</p>
+                          <p>{setupLLMPayload ? `${setupLLMPayload.name} · ${setupLLMPayload.models[0] || '未指定模型'}` : '请先在当前页补齐 AI 配置'}</p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="settings-secondary"
+                          disabled={isTestingSetupLLM}
+                          isLoading={isTestingSetupLLM}
+                          loadingText="测试中..."
+                          onClick={() => void testSetupLLM()}
+                        >
+                          测试 LLM
+                        </Button>
+                      </div>
+                      {setupLLMResult ? (
+                        <div className="mt-2 text-xs leading-5">
+                          <p className={setupLLMResult.success ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}>
+                            {setupLLMResult.success
+                              ? 'LLM 可用'
+                              : `${setupLLMResult.errorType || 'unknown'}：${setupLLMResult.error || setupLLMResult.message}`}
+                          </p>
+                          {setupLLMResult.stages[0] ? (
+                            <p className="text-secondary-text">
+                              {setupLLMResult.stages.map((stage) => `${stage.title}：${stage.detail}`).join(' / ')}
+                            </p>
+                          ) : null}
+                          {setupLLMResult.nextStep ? <p className="text-muted-text">下一步：{setupLLMResult.nextStep}</p> : null}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="rounded-xl border settings-border bg-background/60 px-3 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-medium text-foreground">保存 1-3 只试跑股票并执行 dry-run</p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="settings-secondary"
+                            disabled={isSavingSetupStocks}
+                            isLoading={isSavingSetupStocks}
+                            loadingText="保存中..."
+                            onClick={() => void saveSetupStocks()}
+                          >
+                            保存股票
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="settings-secondary"
+                            disabled={isRunningSetupSmoke}
+                            isLoading={isRunningSetupSmoke}
+                            loadingText="试跑中..."
+                            onClick={() => void runSetupSmoke()}
+                          >
+                            首次试跑
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="mt-2">
+                        <input
+                          value={setupStockInput}
+                          onChange={(event) => setSetupStockInput(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              addSetupStock(setupStockInput);
+                            }
+                          }}
+                          placeholder="输入 600519、腾讯、AAPL"
+                          className="block w-full rounded-xl border border-subtle bg-background px-3 py-2 text-sm text-foreground"
+                          disabled={setupStocks.length >= MAX_SETUP_STOCKS}
+                        />
+                      </div>
+                      {!!setupStocks.length && (
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                          {setupStocks.map((stock) => (
+                            <button
+                              key={stock}
+                              type="button"
+                              className="rounded-full border border-subtle bg-background/70 px-3 py-1 text-secondary-text"
+                              onClick={() => setSetupStocks((current) => current.filter((item) => item !== stock))}
+                            >
+                              {stock} ×
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {setupStockError ? <p className="mt-2 text-xs text-rose-600 dark:text-rose-300">{setupStockError}</p> : null}
+                      {setupSmokeResult ? (
+                        <div className="mt-2 text-xs leading-5">
+                          <p className={setupSmokeResult.success ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}>
+                            {setupSmokeResult.message}
+                          </p>
+                          {setupSmokeResult.summary ? <p className="text-secondary-text">{setupSmokeResult.summary}</p> : null}
+                          {setupSmokeResult.nextStep ? <p className="text-muted-text">下一步：{setupSmokeResult.nextStep}</p> : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </SettingsSectionCard>
+            ) : null}
             {activeCategory === 'system' ? <AuthSettingsCard /> : null}
             {activeCategory === 'system' ? (
               <SettingsSectionCard
