@@ -1,4 +1,6 @@
 import logging
+import sys
+from types import SimpleNamespace
 
 import pytest
 import requests
@@ -7,16 +9,18 @@ from data_provider.akshare_fetcher import (
     AkshareFetcher,
     SINA_REALTIME_ENDPOINT,
     TENCENT_REALTIME_ENDPOINT,
+    _realtime_cache,
 )
 
 
 class _DummyCircuitBreaker:
-    def __init__(self):
+    def __init__(self, available: bool = True):
+        self.available = available
         self.failures = []
         self.successes = []
 
     def is_available(self, source: str) -> bool:
-        return True
+        return self.available
 
     def record_success(self, source: str) -> None:
         self.successes.append(source)
@@ -69,6 +73,16 @@ def akshare_fetcher(monkeypatch):
     fetcher = AkshareFetcher()
     monkeypatch.setattr(fetcher, "_enforce_rate_limit", lambda: None)
     return fetcher
+
+
+@pytest.fixture(autouse=True)
+def reset_realtime_cache():
+    original = dict(_realtime_cache)
+    _realtime_cache["data"] = None
+    _realtime_cache["timestamp"] = 0
+    yield
+    _realtime_cache.clear()
+    _realtime_cache.update(original)
 
 
 def test_sina_realtime_success_logs_endpoint(caplog, monkeypatch, akshare_fetcher):
@@ -148,3 +162,18 @@ def test_tencent_realtime_success_logs_endpoint(caplog, monkeypatch, akshare_fet
     assert breaker.successes == ["akshare_tencent"]
     assert f"endpoint={TENCENT_REALTIME_ENDPOINT}" in caplog.text
     assert "[实时行情-腾讯] 601006 大秦铁路:" in caplog.text
+
+
+def test_em_realtime_dataframe_fast_fails_when_circuit_breaker_open(monkeypatch, akshare_fetcher):
+    breaker = _DummyCircuitBreaker(available=False)
+    monkeypatch.setattr("data_provider.akshare_fetcher.get_realtime_circuit_breaker", lambda: breaker)
+
+    def _unexpected_call():
+        raise AssertionError("ak.stock_zh_a_spot_em should not be called when breaker is open")
+
+    monkeypatch.setitem(sys.modules, "akshare", SimpleNamespace(stock_zh_a_spot_em=_unexpected_call))
+
+    df = akshare_fetcher._get_stock_realtime_dataframe_em()
+
+    assert df is not None
+    assert df.empty

@@ -137,6 +137,86 @@ class MarketReviewLocalizationTestCase(unittest.TestCase):
         self.assertIn("\n\n---\n\n### 热门板块", result)
         self.assertIn("### 热门股票", result)
 
+    def test_run_market_review_inserts_hotspots_before_us_section_when_both(self) -> None:
+        notifier = self._make_notifier()
+        cn_analyzer = MagicMock()
+        cn_analyzer.run_daily_review.return_value = "CN body"
+        us_analyzer = MagicMock()
+        us_analyzer.run_daily_review.return_value = "US body"
+        hotspot_service = MagicMock()
+        hotspot_service.build_markdown.return_value = "### 热门板块\n- **机器人**: +6.20%"
+
+        with patch.object(
+            market_review_module,
+            "get_config",
+            return_value=SimpleNamespace(report_language="zh", market_review_region="both"),
+        ), patch.object(
+            market_review_module,
+            "MarketAnalyzer",
+            side_effect=[cn_analyzer, us_analyzer],
+        ), patch.object(
+            market_review_module,
+            "MarketReviewHotspotService",
+            return_value=hotspot_service,
+        ):
+            result = run_market_review(notifier, send_notification=False)
+
+        cn_index = result.index("# A股大盘复盘\n\nCN body")
+        hotspot_index = result.index("### 热门板块")
+        us_index = result.index("# 美股大盘复盘\n\nUS body")
+        self.assertLess(cn_index, hotspot_index)
+        self.assertLess(hotspot_index, us_index)
+
+    def test_run_market_review_skips_hotspots_when_cn_section_missing_in_both_mode(self) -> None:
+        notifier = self._make_notifier()
+        cn_analyzer = MagicMock()
+        cn_analyzer.run_daily_review.return_value = None
+        us_analyzer = MagicMock()
+        us_analyzer.run_daily_review.return_value = "US body"
+        hotspot_service = MagicMock()
+
+        with patch.object(
+            market_review_module,
+            "get_config",
+            return_value=SimpleNamespace(report_language="zh", market_review_region="both"),
+        ), patch.object(
+            market_review_module,
+            "MarketAnalyzer",
+            side_effect=[cn_analyzer, us_analyzer],
+        ), patch.object(
+            market_review_module,
+            "MarketReviewHotspotService",
+            return_value=hotspot_service,
+        ):
+            result = run_market_review(notifier, send_notification=False)
+
+        self.assertEqual(result, "# 美股大盘复盘\n\nUS body")
+        hotspot_service.build_markdown.assert_not_called()
+
+    def test_run_market_review_hotspot_append_fail_open_on_exception(self) -> None:
+        notifier = self._make_notifier()
+        market_analyzer = MagicMock()
+        market_analyzer.run_daily_review.return_value = "## 2026-04-10 大盘复盘\n\n正文"
+        hotspot_service = MagicMock()
+        hotspot_service.build_markdown.side_effect = RuntimeError("hotspot failed")
+
+        with patch.object(
+            market_review_module,
+            "get_config",
+            return_value=SimpleNamespace(report_language="zh", market_review_region="cn"),
+        ), patch.object(
+            market_review_module,
+            "MarketAnalyzer",
+            return_value=market_analyzer,
+        ), patch.object(
+            market_review_module,
+            "MarketReviewHotspotService",
+            return_value=hotspot_service,
+        ):
+            result = run_market_review(notifier, send_notification=False)
+
+        self.assertEqual(result, "## 2026-04-10 大盘复盘\n\n正文")
+
 
 if __name__ == "__main__":
     unittest.main()

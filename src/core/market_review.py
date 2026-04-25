@@ -49,21 +49,41 @@ def _append_hotspot_sections(
     review_report: Optional[str],
     region: str,
     language: str,
+    *,
+    has_cn_section: bool = False,
+    separator_text: Optional[str] = None,
 ) -> Optional[str]:
     if not review_report:
         return review_report
 
-    hotspot_region = "cn" if region == "both" else region
-    if hotspot_region != "cn":
+    if region == "cn":
+        hotspot_region = "cn"
+    elif region == "both" and has_cn_section:
+        hotspot_region = "cn"
+    else:
         return review_report
 
-    appendix = MarketReviewHotspotService().build_markdown(
-        region=hotspot_region,
-        language=language,
-    )
-    if not appendix:
+    try:
+        appendix = MarketReviewHotspotService().build_markdown(
+            region=hotspot_region,
+            language=language,
+        )
+        if not appendix:
+            return review_report
+        if region == "both" and separator_text:
+            separator_block = f"\n\n---\n\n{separator_text}\n\n"
+            if separator_block in review_report:
+                cn_section, us_section = review_report.split(separator_block, 1)
+                return f"{cn_section}\n\n---\n\n{appendix}{separator_block}{us_section}"
+        return f"{review_report}\n\n---\n\n{appendix}"
+    except Exception as exc:
+        logger.warning(
+            "Failed to append market review hotspot sections for region=%s language=%s: %s",
+            hotspot_region,
+            language,
+            exc,
+        )
         return review_report
-    return f"{review_report}\n\n---\n\n{appendix}"
 
 
 def run_market_review(
@@ -99,6 +119,8 @@ def run_market_review(
     if region not in ('cn', 'us', 'both'):
         region = 'cn'
 
+    cn_report: Optional[str] = None
+
     try:
         if region == 'both':
             # 顺序执行 A 股 + 美股，合并报告
@@ -133,6 +155,8 @@ def run_market_review(
             review_report,
             region=region,
             language=getattr(config, "report_language", "zh"),
+            has_cn_section=bool(region == "cn" or (region == "both" and cn_report)),
+            separator_text=review_text["separator"] if region == "both" else None,
         )
 
         if review_report:

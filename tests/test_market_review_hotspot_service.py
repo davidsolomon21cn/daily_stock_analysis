@@ -72,3 +72,23 @@ class MarketReviewHotspotServiceTestCase(unittest.TestCase):
         markdown = service.build_markdown(region="us", language="en")
 
         self.assertEqual(markdown, "")
+
+    def test_build_markdown_skips_invalid_turnover_rate(self) -> None:
+        service = MarketReviewHotspotService(
+            manager=_StubManager(
+                stocks=[
+                    {
+                        "code": "300308",
+                        "name": "中际旭创",
+                        "change_pct": 9.91,
+                        "amount": 2_300_000_000,
+                        "turnover_rate": "-",
+                    }
+                ]
+            )
+        )
+
+        markdown = service.build_markdown(region="cn", language="zh")
+
+        self.assertIn("中际旭创 (300308)", markdown)
+        self.assertNotIn("换手率", markdown)

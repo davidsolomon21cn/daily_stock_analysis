@@ -90,7 +90,7 @@ class MarketReviewHotspotService:
         code = str(stock.get("code", "")).strip()
         name = str(stock.get("name", "")).strip() or code or "-"
         amount_text = self._format_amount(stock.get("amount"), language)
-        turnover_rate = stock.get("turnover_rate")
+        turnover_rate = self._safe_float(stock.get("turnover_rate"))
 
         parts = [
             f"{self._format_change(stock.get('change_pct'))}",
@@ -98,9 +98,9 @@ class MarketReviewHotspotService:
         ]
         if turnover_rate is not None:
             parts.append(
-                f"turnover rate {float(turnover_rate):.1f}%"
+                f"turnover rate {turnover_rate:.1f}%"
                 if language == "en"
-                else f"换手率 {float(turnover_rate):.1f}%"
+                else f"换手率 {turnover_rate:.1f}%"
             )
         return f"- **{name} ({code})**: {', '.join(parts)}"
 
@@ -130,3 +130,10 @@ class MarketReviewHotspotService:
         if abs(amount) >= 1e4:
             return f"{amount / 1e4:.0f}万"
         return f"{amount:.0f}元"
+
+    @staticmethod
+    def _safe_float(value: Any) -> Optional[float]:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None

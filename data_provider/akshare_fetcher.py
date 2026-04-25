@@ -894,6 +894,10 @@ class AkshareFetcher(BaseFetcher):
             )
             return df
 
+        if not circuit_breaker.is_available(source_key):
+            logger.info(f"[熔断] 数据源 {source_key} 处于熔断状态，跳过全量刷新")
+            return pd.DataFrame()
+
         logger.info(f"[缓存未命中] 触发全量刷新 A股实时行情(东财)")
         last_error: Optional[Exception] = None
         df = None
