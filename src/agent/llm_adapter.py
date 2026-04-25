@@ -398,7 +398,7 @@ class LLMToolAdapter:
             "messages": openai_messages,
             "temperature": normalize_litellm_temperature(
                 model,
-                self._get_temperature(model) if temperature is None else temperature,
+                self._get_temperature() if temperature is None else temperature,
             ),
         }
         if max_tokens is not None:
@@ -435,7 +435,7 @@ class LLMToolAdapter:
 
         return self._parse_litellm_response(response, model)
 
-    def _get_temperature(self, _model: str) -> float:
+    def _get_temperature(self) -> float:
         """Return the raw configured temperature before per-model normalization."""
         return float(self._config.llm_temperature)
 
