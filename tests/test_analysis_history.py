@@ -268,9 +268,10 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         self.assertEqual(report.meta.current_price, 200.0)
         self.assertEqual(report.meta.change_pct, 1.23)
 
-    def test_history_detail_ignores_non_dict_realtime_quote_raw(self) -> None:
-        """Malformed realtime_quote_raw should not break detail responses."""
-        if get_history_detail is None:
+    @patch("src.auth.is_auth_enabled", return_value=False)
+    def test_history_detail_ignores_non_dict_realtime_quote_raw(self, mock_auth) -> None:
+        """GET /api/v1/history/{id} should tolerate truthy non-dict realtime_quote_raw."""
+        if TestClient is None or create_app is None:
             self.skipTest("fastapi is not installed in this test environment")
 
         context_snapshot = {
@@ -296,9 +297,16 @@ class AnalysisHistoryTestCase(unittest.TestCase):
                 self.fail("未找到保存的历史记录")
             record_id = row.id
 
-        report = get_history_detail(str(record_id), db_manager=self.db)
-        self.assertEqual(report.meta.current_price, 300.0)
-        self.assertIsNone(report.meta.change_pct)
+        static_dir = Path(self._temp_dir.name) / "empty-static"
+        static_dir.mkdir(exist_ok=True)
+        client = TestClient(create_app(static_dir=static_dir))
+
+        response = client.get(f"/api/v1/history/{record_id}")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["meta"]["current_price"], 300.0)
+        self.assertIsNone(payload["meta"]["change_pct"])
 
     def test_history_detail_accepts_dict_raw_result(self) -> None:
         """_record_to_detail_dict should handle dict raw_result without json.loads errors."""
