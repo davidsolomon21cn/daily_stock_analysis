@@ -830,6 +830,8 @@ class AkshareFetcher(BaseFetcher):
         优点：数据最全，含量比、换手率、市盈率、市净率、总市值、流通市值等
         缺点：全量拉取，数据量大，容易超时/限流
         """
+        circuit_breaker = get_realtime_circuit_breaker()
+        source_key = "akshare_em"
         try:
             df = self._get_stock_realtime_dataframe_em()
             if df is None or df.empty:
@@ -874,6 +876,7 @@ class AkshareFetcher(BaseFetcher):
             return quote
         except Exception as e:
             logger.info(f"[API错误] 获取 {stock_code} 实时行情(东财)失败: {e}")
+            circuit_breaker.record_failure(source_key, str(e))
             return None
 
     def _get_stock_realtime_dataframe_em(self) -> Optional[pd.DataFrame]:

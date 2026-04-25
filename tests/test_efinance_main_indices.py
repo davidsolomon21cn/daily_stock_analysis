@@ -11,6 +11,20 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from data_provider.efinance_fetcher import EfinanceFetcher
 
 
+class _DummyCircuitBreaker:
+    def __init__(self):
+        self.failures = []
+
+    def record_failure(self, source: str, error=None) -> None:
+        self.failures.append((source, error))
+
+    def record_success(self, source: str) -> None:
+        return None
+
+    def is_available(self, source: str) -> bool:
+        return True
+
+
 class TestEfinanceMainIndices(unittest.TestCase):
     def test_get_main_indices_prefers_jinkai_column_for_open_price(self):
         fetcher = EfinanceFetcher()
@@ -76,6 +90,20 @@ class TestEfinanceMainIndices(unittest.TestCase):
         self.assertIsNotNone(data)
         self.assertEqual(len(data), 1)
         self.assertAlmostEqual(data[0]["open"], 3186.0)
+
+    def test_get_realtime_quote_records_circuit_breaker_failure_on_parse_error(self):
+        fetcher = EfinanceFetcher()
+        breaker = _DummyCircuitBreaker()
+        malformed_df = pd.DataFrame({"unexpected": ["value"]})
+
+        with patch("data_provider.efinance_fetcher.get_realtime_circuit_breaker", return_value=breaker):
+            with patch.object(fetcher, "_get_stock_realtime_dataframe", return_value=malformed_df):
+                quote = fetcher.get_realtime_quote("000001")
+
+        self.assertIsNone(quote)
+        self.assertEqual(len(breaker.failures), 1)
+        self.assertEqual(breaker.failures[0][0], "efinance")
+        self.assertIn("code", str(breaker.failures[0][1]))
 
 
 if __name__ == "__main__":

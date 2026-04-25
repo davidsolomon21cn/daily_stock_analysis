@@ -601,6 +601,8 @@ class EfinanceFetcher(BaseFetcher):
         if _is_etf_code(stock_code):
             return self._get_etf_realtime_quote(stock_code)
 
+        circuit_breaker = get_realtime_circuit_breaker()
+        source_key = "efinance"
         df = self._get_stock_realtime_dataframe()
         if df is None or df.empty:
             logger.info(f"[实时行情] 股票实时行情数据为空，跳过 {stock_code}")
@@ -661,6 +663,7 @@ class EfinanceFetcher(BaseFetcher):
             return quote
         except Exception as e:
             logger.info(f"[API错误] 解析 {stock_code} 实时行情(efinance)失败: {e}")
+            circuit_breaker.record_failure(source_key, str(e))
             return None
 
     def _get_stock_realtime_dataframe(self) -> Optional[pd.DataFrame]:

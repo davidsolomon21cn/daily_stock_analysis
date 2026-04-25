@@ -191,3 +191,21 @@ def test_hot_stocks_skips_full_market_request_when_circuit_breaker_open(monkeypa
     hot_stocks = akshare_fetcher.get_hot_stocks()
 
     assert hot_stocks is None
+
+
+def test_em_realtime_parse_error_records_circuit_breaker_failure(monkeypatch, akshare_fetcher):
+    breaker = _DummyCircuitBreaker()
+    monkeypatch.setattr("data_provider.akshare_fetcher.get_realtime_circuit_breaker", lambda: breaker)
+    monkeypatch.setattr(
+        akshare_fetcher,
+        "_get_stock_realtime_dataframe_em",
+        lambda: SimpleNamespace(empty=False),
+    )
+
+    quote = akshare_fetcher._get_stock_realtime_quote_em("600519")
+
+    assert quote is None
+    assert breaker.failures
+    source_key, message = breaker.failures[0]
+    assert source_key == "akshare_em"
+    assert "object is not subscriptable" in str(message)
