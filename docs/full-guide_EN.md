@@ -880,6 +880,7 @@ FastAPI provides RESTful API service for configuration management and triggering
 | `/api/v1/analysis/tasks/stream` | GET (SSE) | Subscribe to realtime task updates |
 | `/api/v1/analysis/status/{task_id}` | GET | Query task status |
 | `/api/v1/history` | GET | Query analysis history |
+| `/api/v1/usage/summary?period=today|month|all` | GET | Query LLM call counts and token usage grouped by call type and model |
 | `/api/v1/backtest/run` | POST | Trigger backtest |
 | `/api/v1/backtest/results` | GET | Query backtest results (paginated) |
 | `/api/v1/backtest/performance` | GET | Get overall backtest performance |
@@ -906,6 +907,9 @@ curl -X POST http://127.0.0.1:8000/api/v1/analysis/analyze \
 
 # Query task status
 curl http://127.0.0.1:8000/api/v1/analysis/status/<task_id>
+
+# Query today's LLM usage
+curl "http://127.0.0.1:8000/api/v1/usage/summary?period=today"
 
 # Trigger backtest (all stocks)
 curl -X POST http://127.0.0.1:8000/api/v1/backtest/run \
