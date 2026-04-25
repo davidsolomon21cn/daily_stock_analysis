@@ -32,6 +32,20 @@ function looksLikeStockCode(value: string) {
 
 function buildSetupLLMPayload(items: SystemConfigItem[], maskToken: string) {
   const itemMap = new Map(items.map((item) => [item.key, String(item.value ?? '')]));
+  const liteLLMModel = (itemMap.get('LITELLM_MODEL') || '').trim();
+  const normalizedLiteLLMModel = liteLLMModel.toLowerCase();
+  const liteLLMProvider =
+    normalizedLiteLLMModel.startsWith('gemini') || normalizedLiteLLMModel.startsWith('google/')
+      ? 'gemini'
+      : normalizedLiteLLMModel.startsWith('deepseek')
+        ? 'deepseek'
+        : normalizedLiteLLMModel.startsWith('gpt-')
+            || normalizedLiteLLMModel.startsWith('openai/')
+            || normalizedLiteLLMModel.startsWith('o1')
+            || normalizedLiteLLMModel.startsWith('o3')
+            || normalizedLiteLLMModel.startsWith('chatgpt')
+          ? 'openai'
+          : '';
   const channelName = splitCsv(itemMap.get('LLM_CHANNELS') || '').find((name) => {
     const prefix = `LLM_${name.toUpperCase()}`;
     return (itemMap.get(`${prefix}_ENABLED`) || 'true').trim().toLowerCase() !== 'false';
@@ -48,9 +62,39 @@ function buildSetupLLMPayload(items: SystemConfigItem[], maskToken: string) {
       maskToken,
     };
   }
-  if ((itemMap.get('GEMINI_API_KEY') || '').trim()) return { name: 'gemini', protocol: 'gemini', baseUrl: '', apiKey: itemMap.get('GEMINI_API_KEY') || '', models: ['gemini-2.5-flash'], enabled: true, maskToken };
-  if ((itemMap.get('DEEPSEEK_API_KEY') || '').trim()) return { name: 'deepseek', protocol: 'deepseek', baseUrl: 'https://api.deepseek.com', apiKey: itemMap.get('DEEPSEEK_API_KEY') || '', models: ['deepseek-chat'], enabled: true, maskToken };
-  if ((itemMap.get('OPENAI_API_KEY') || itemMap.get('AIHUBMIX_KEY') || '').trim()) return { name: 'openai', protocol: 'openai', baseUrl: itemMap.get('OPENAI_BASE_URL') || '', apiKey: itemMap.get('OPENAI_API_KEY') || itemMap.get('AIHUBMIX_KEY') || '', models: ['gpt-4o-mini'], enabled: true, maskToken };
+  if ((itemMap.get('GEMINI_API_KEY') || '').trim()) {
+    return {
+      name: 'gemini',
+      protocol: 'gemini',
+      baseUrl: '',
+      apiKey: itemMap.get('GEMINI_API_KEY') || '',
+      models: [liteLLMProvider === 'gemini' && liteLLMModel ? liteLLMModel : 'gemini-2.5-flash'],
+      enabled: true,
+      maskToken,
+    };
+  }
+  if ((itemMap.get('DEEPSEEK_API_KEY') || '').trim()) {
+    return {
+      name: 'deepseek',
+      protocol: 'deepseek',
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: itemMap.get('DEEPSEEK_API_KEY') || '',
+      models: [liteLLMProvider === 'deepseek' && liteLLMModel ? liteLLMModel : 'deepseek-chat'],
+      enabled: true,
+      maskToken,
+    };
+  }
+  if ((itemMap.get('OPENAI_API_KEY') || itemMap.get('AIHUBMIX_KEY') || '').trim()) {
+    return {
+      name: 'openai',
+      protocol: 'openai',
+      baseUrl: itemMap.get('OPENAI_BASE_URL') || '',
+      apiKey: itemMap.get('OPENAI_API_KEY') || itemMap.get('AIHUBMIX_KEY') || '',
+      models: [liteLLMProvider === 'openai' && liteLLMModel ? liteLLMModel : 'gpt-4o-mini'],
+      enabled: true,
+      maskToken,
+    };
+  }
   return null;
 }
 
@@ -124,7 +168,7 @@ const HomePage: React.FC = () => {
     setSetupStatus(payload.setupStatus);
     setSetupItems(payload.items);
     setSetupMaskToken(payload.maskToken);
-    setSetupStocks(splitCsv(String(payload.items.find((item) => item.key === 'STOCK_LIST')?.value || '')).slice(0, MAX_SETUP_STOCKS));
+    setSetupStocks(splitCsv(String(payload.items.find((item) => item.key === 'STOCK_LIST')?.value || '')));
     setSetupError(null);
     if (payload.setupStatus.isComplete && typeof localStorage !== 'undefined') {
       localStorage.removeItem(SETUP_PROMPT_STORAGE_KEY);

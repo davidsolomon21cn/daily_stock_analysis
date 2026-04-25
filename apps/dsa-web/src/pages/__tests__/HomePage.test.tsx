@@ -41,6 +41,9 @@ vi.mock('../../api/analysis', async () => {
 vi.mock('../../api/systemConfig', () => ({
   systemConfigApi: {
     getConfig: vi.fn(),
+    update: vi.fn(),
+    testLLMChannel: vi.fn(),
+    runSetupSmoke: vi.fn(),
   },
 }));
 
@@ -112,6 +115,40 @@ describe('HomePage', () => {
             nextAction: '请先添加股票',
           },
         ],
+      },
+    });
+    vi.mocked(systemConfigApi.update).mockResolvedValue({
+      success: true,
+      configVersion: 'v2',
+      appliedCount: 1,
+      skippedMaskedCount: 0,
+      reloadTriggered: true,
+      updatedKeys: ['STOCK_LIST'],
+      warnings: [],
+    });
+    vi.mocked(systemConfigApi.testLLMChannel).mockResolvedValue({
+      success: true,
+      message: 'ok',
+      error: null,
+      errorType: null,
+      resolvedModel: 'gemini/gemini-2.5-flash',
+      latencyMs: 10,
+      nextStep: null,
+      stages: [],
+    });
+    vi.mocked(systemConfigApi.runSetupSmoke).mockResolvedValue({
+      success: true,
+      message: 'ok',
+      errorCode: null,
+      nextStep: null,
+      resolvedStockCode: '600519',
+      summary: 'ok',
+      setupStatus: {
+        isComplete: false,
+        readyForSmoke: false,
+        requiredMissingKeys: ['llm_primary', 'stock_list'],
+        nextStepKey: 'llm_primary',
+        checks: [],
       },
     });
   });
@@ -187,6 +224,104 @@ describe('HomePage', () => {
     expect(await screen.findByText('基础配置尚未完成')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '打开设置页' }));
     expect(navigateMock).toHaveBeenCalledWith('/settings');
+  });
+
+  it('preserves the full stock list when saving setup stocks', async () => {
+    vi.mocked(historyApi.getList).mockResolvedValue({
+      total: 0,
+      page: 1,
+      limit: 20,
+      items: [],
+    });
+    vi.mocked(systemConfigApi.getConfig).mockResolvedValue({
+      configVersion: 'v1',
+      maskToken: '******',
+      updatedAt: '2026-03-21T00:00:00Z',
+      items: [
+        { key: 'STOCK_LIST', value: '600519,000001,300750,AAPL', rawValueExists: true, isMasked: false },
+      ],
+      setupStatus: {
+        isComplete: false,
+        readyForSmoke: false,
+        requiredMissingKeys: ['llm_primary'],
+        nextStepKey: 'llm_primary',
+        checks: [
+          {
+            key: 'llm_primary',
+            title: 'LLM 主渠道',
+            category: 'ai_model',
+            required: true,
+            status: 'needs_action',
+            message: '尚未检测到可用的主模型配置',
+            nextAction: '请先配置主模型',
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '保存股票' }));
+
+    await waitFor(() => {
+      expect(systemConfigApi.update).toHaveBeenCalledWith(expect.objectContaining({
+        items: [{ key: 'STOCK_LIST', value: '600519,000001,300750,AAPL' }],
+      }));
+    });
+  });
+
+  it('uses the configured LiteLLM primary model when testing legacy provider keys', async () => {
+    vi.mocked(historyApi.getList).mockResolvedValue({
+      total: 0,
+      page: 1,
+      limit: 20,
+      items: [],
+    });
+    vi.mocked(systemConfigApi.getConfig).mockResolvedValue({
+      configVersion: 'v1',
+      maskToken: '******',
+      updatedAt: '2026-03-21T00:00:00Z',
+      items: [
+        { key: 'LITELLM_MODEL', value: 'gemini/gemini-2.0-pro', rawValueExists: true, isMasked: false },
+        { key: 'GEMINI_API_KEY', value: '******', rawValueExists: true, isMasked: true },
+      ],
+      setupStatus: {
+        isComplete: false,
+        readyForSmoke: false,
+        requiredMissingKeys: ['stock_list'],
+        nextStepKey: 'stock_list',
+        checks: [
+          {
+            key: 'stock_list',
+            title: '自选股',
+            category: 'base',
+            required: true,
+            status: 'needs_action',
+            message: '当前自选股列表为空',
+            nextAction: '请先添加股票',
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '测试 LLM' }));
+
+    await waitFor(() => {
+      expect(systemConfigApi.testLLMChannel).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'gemini',
+        models: ['gemini/gemini-2.0-pro'],
+      }));
+    });
   });
 
   it('surfaces duplicate task warnings from dashboard submission', async () => {

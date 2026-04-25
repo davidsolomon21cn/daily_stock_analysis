@@ -6,8 +6,8 @@ from __future__ import annotations
 import io
 import logging
 import json
+import os
 import re
-import sqlite3
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
@@ -104,10 +104,19 @@ class SystemConfigService:
             return value, False
         return mask_token, True
 
+    def _read_persisted_config_map(self) -> Dict[str, str]:
+        """Read persisted `.env` values without mutating runtime state."""
+        raw_config = self._manager.read_config_map()
+        return {
+            str(key): "" if value is None else str(value)
+            for key, value in raw_config.items()
+        }
+
     @staticmethod
-    def _load_runtime_config() -> Config:
-        Config.reset_instance()
-        setup_env(override=True)
+    def _load_runtime_config(*, reload_runtime: bool = False) -> Config:
+        if reload_runtime:
+            Config.reset_instance()
+            setup_env(override=True)
         return Config.get_instance()
 
     @staticmethod
@@ -238,14 +247,14 @@ class SystemConfigService:
 
     def get_setup_status(self) -> Dict[str, Any]:
         """Return the first-run setup completion status for the current config."""
-        effective_map = self._manager.read_config_map()
+        effective_map = self._read_persisted_config_map()
         runtime_config = self._load_runtime_config()
 
         llm_check = self._build_primary_llm_check(runtime_config=runtime_config)
         agent_check = self._build_agent_llm_check(effective_map=effective_map, runtime_config=runtime_config, llm_check=llm_check)
-        stock_check = self._build_stock_list_check(runtime_config=runtime_config)
+        stock_check = self._build_stock_list_check(effective_map=effective_map)
         notification_check = self._build_notification_check(runtime_config=runtime_config)
-        storage_check = self._build_storage_check(runtime_config=runtime_config)
+        storage_check = self._build_storage_check(effective_map=effective_map)
 
         checks = [
             llm_check,
@@ -279,7 +288,7 @@ class SystemConfigService:
             ]
             return self._smoke_payload(False, "基础配置尚未满足试跑条件", error_code="setup_incomplete", next_step="请先补齐 LLM、自选股或本地存储配置", resolved_stock_code=None, summary=f"仍缺少：{'、'.join(missing_labels)}", setup_status=setup_status)
 
-        runtime_config = self._load_runtime_config()
+        runtime_config = self._load_runtime_config(reload_runtime=True)
         stock_candidate = (stock_input or "").strip()
         if not stock_candidate:
             stock_candidate = (runtime_config.stock_list[0] if runtime_config.stock_list else "").strip()
@@ -490,6 +499,7 @@ class SystemConfigService:
         channel_name = name.strip() or "channel"
         api_key = self._resolve_request_api_key(
             channel_name=channel_name,
+            protocol=protocol,
             api_key=api_key,
             mask_token=mask_token,
         )
@@ -787,12 +797,95 @@ class SystemConfigService:
         issues.extend(self._validate_cross_field(effective_map=effective_map, updated_keys=set(updated_map.keys())))
         return issues
 
-    def _resolve_request_api_key(self, *, channel_name: str, api_key: str, mask_token: str) -> str:
+    @staticmethod
+    def _legacy_provider_api_key_candidates(protocol: str) -> List[str]:
+        normalized_protocol = canonicalize_llm_channel_protocol(protocol or "")
+        if not normalized_protocol:
+            return []
+
+        candidates: List[str] = []
+        seen: Set[str] = set()
+
+        def _add_candidate(env_key: str) -> None:
+            normalized_key = (env_key or "").strip().upper()
+            if normalized_key and normalized_key not in seen:
+                seen.add(normalized_key)
+                candidates.append(normalized_key)
+
+        provider_aliases = {normalized_protocol}
+        litellm_provider = _get_litellm_provider(normalized_protocol)
+        if litellm_provider:
+            provider_aliases.add(str(litellm_provider).strip().lower())
+
+        explicit_candidates = {
+            "gemini": ("GEMINI_API_KEYS", "GEMINI_API_KEY"),
+            "vertex_ai": ("GEMINI_API_KEYS", "GEMINI_API_KEY"),
+            "anthropic": ("ANTHROPIC_API_KEYS", "ANTHROPIC_API_KEY"),
+            "openai": ("OPENAI_API_KEYS", "AIHUBMIX_KEY", "OPENAI_API_KEY"),
+            "deepseek": ("DEEPSEEK_API_KEYS", "DEEPSEEK_API_KEY"),
+        }
+
+        for provider_name in provider_aliases:
+            normalized_provider = str(provider_name or "").strip().lower()
+            if not normalized_provider:
+                continue
+            for env_key in explicit_candidates.get(normalized_provider, ()):
+                _add_candidate(env_key)
+            if _uses_direct_env_provider(normalized_provider):
+                env_prefix = normalized_provider.upper().replace("-", "_")
+                _add_candidate(f"{env_prefix}_API_KEYS")
+                _add_candidate(f"{env_prefix}_API_KEY")
+
+        return candidates
+
+    def _resolve_masked_request_api_key(
+        self,
+        *,
+        channel_name: str,
+        protocol: str,
+        current_map: Dict[str, str],
+    ) -> str:
+        prefix = f"LLM_{channel_name.upper()}"
+        channel_api_key = (current_map.get(f"{prefix}_API_KEYS") or "").strip() or (current_map.get(f"{prefix}_API_KEY") or "").strip()
+        if channel_api_key:
+            return channel_api_key
+
+        resolved_protocol = resolve_llm_channel_protocol(
+            current_map.get(f"{prefix}_PROTOCOL") or protocol,
+            base_url=current_map.get(f"{prefix}_BASE_URL") or "",
+            models=[
+                model.strip()
+                for model in (current_map.get(f"{prefix}_MODELS") or "").split(",")
+                if model.strip()
+            ],
+            channel_name=channel_name,
+        )
+        for env_key in self._legacy_provider_api_key_candidates(resolved_protocol):
+            resolved_api_key = (current_map.get(env_key) or "").strip()
+            if resolved_api_key:
+                return resolved_api_key
+
+        return ""
+
+    def _resolve_request_api_key(
+        self,
+        *,
+        channel_name: str,
+        protocol: str,
+        api_key: str,
+        mask_token: str,
+    ) -> str:
         if api_key != mask_token:
             return api_key
-        current_map = self._manager.read_config_map()
-        prefix = f"LLM_{channel_name.upper()}"
-        return (current_map.get(f"{prefix}_API_KEYS") or "").strip() or (current_map.get(f"{prefix}_API_KEY") or "").strip() or api_key
+        current_map = self._read_persisted_config_map()
+        return (
+            self._resolve_masked_request_api_key(
+                channel_name=channel_name,
+                protocol=protocol,
+                current_map=current_map,
+            )
+            or api_key
+        )
 
     @staticmethod
     def _sanitize_error_text(text: str, secrets: Sequence[str]) -> str:
@@ -857,8 +950,14 @@ class SystemConfigService:
         return self._setup_check("llm_agent", "Agent 渠道", "agent", True, "configured", f"当前 Agent 主模型：{getattr(runtime_config, 'agent_litellm_model', '') or configured_agent_model}")
 
     @staticmethod
-    def _build_stock_list_check(*, runtime_config: Config) -> Dict[str, Any]:
-        stock_count = len(getattr(runtime_config, "stock_list", []) or [])
+    def _build_stock_list_check(*, effective_map: Dict[str, str]) -> Dict[str, Any]:
+        stock_count = len(
+            [
+                stock.strip()
+                for stock in (effective_map.get("STOCK_LIST") or "").split(",")
+                if stock.strip()
+            ]
+        )
         if stock_count > 0:
             return SystemConfigService._setup_check("stock_list", "自选股", "base", True, "configured", f"已配置 {stock_count} 只股票")
         return SystemConfigService._setup_check("stock_list", "自选股", "base", True, "needs_action", "当前自选股列表为空", "请至少添加 1 只股票用于首次试跑")
@@ -889,13 +988,34 @@ class SystemConfigService:
         )
 
     @staticmethod
-    def _build_storage_check(*, runtime_config: Config) -> Dict[str, Any]:
-        db_path = Path(getattr(runtime_config, "database_path", "./data/stock_analysis.db")).expanduser()
+    def _build_storage_check(*, effective_map: Dict[str, str]) -> Dict[str, Any]:
+        db_path = Path(
+            (effective_map.get("DATABASE_PATH") or "./data/stock_analysis.db").strip()
+            or "./data/stock_analysis.db"
+        ).expanduser()
+        parent_path = db_path.parent if str(db_path.parent) else Path(".")
         try:
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            with sqlite3.connect(str(db_path)) as connection:
-                connection.execute("SELECT 1")
-            return SystemConfigService._setup_check("storage", "数据库 / 本地存储", "system", True, "configured", f"SQLite 可用：{db_path}")
+            if db_path.exists() and db_path.is_dir():
+                raise ValueError("DATABASE_PATH 指向了目录而不是文件")
+            if parent_path.exists() and not parent_path.is_dir():
+                raise ValueError("DATABASE_PATH 的父路径不是目录")
+
+            existing_parent = parent_path
+            while not existing_parent.exists() and existing_parent != existing_parent.parent:
+                existing_parent = existing_parent.parent
+            if not existing_parent.exists():
+                raise ValueError("DATABASE_PATH 不存在可写父目录")
+            if not os.access(existing_parent, os.W_OK | os.X_OK):
+                raise PermissionError(f"目录不可写：{existing_parent}")
+            if db_path.exists() and not os.access(db_path, os.W_OK):
+                raise PermissionError(f"数据库文件不可写：{db_path}")
+
+            detail = (
+                f"SQLite 路径可写：{db_path}"
+                if not db_path.exists()
+                else f"SQLite 文件可写：{db_path}"
+            )
+            return SystemConfigService._setup_check("storage", "数据库 / 本地存储", "system", True, "configured", detail)
         except Exception as exc:
             return SystemConfigService._setup_check("storage", "数据库 / 本地存储", "system", True, "needs_action", f"本地数据库不可用：{exc}", "请检查 DATABASE_PATH 指向的目录是否可写")
 
