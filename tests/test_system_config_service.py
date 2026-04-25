@@ -793,8 +793,7 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         self.assertFalse(validation["valid"])
         self.assertTrue(any(issue["key"] == "LITELLM_MODEL" and issue["code"] == "missing_runtime_source" for issue in validation["issues"]))
 
-    def test_validate_accepts_minimax_model_as_direct_env_provider(self) -> None:
-        """minimax is NOT a managed key provider; it uses LiteLLM direct-env routing."""
+    def test_validate_reports_missing_runtime_source_for_direct_env_provider_without_key(self) -> None:
         validation = self.service.validate(
             items=[
                 {"key": "LLM_CHANNELS", "value": "primary"},
@@ -806,7 +805,35 @@ class SystemConfigServiceTestCase(unittest.TestCase):
             ]
         )
 
-        self.assertFalse(any(issue.get("key") == "LITELLM_MODEL" and issue["code"] == "missing_runtime_source" for issue in validation.get("issues", [])))
+        self.assertFalse(validation["valid"])
+        self.assertTrue(any(issue["key"] == "LITELLM_MODEL" and issue["code"] == "missing_runtime_source" for issue in validation["issues"]))
+
+    def test_validate_accepts_direct_env_provider_when_matching_key_exists(self) -> None:
+        validation = self.service.validate(
+            items=[
+                {"key": "LLM_CHANNELS", "value": "primary"},
+                {"key": "LLM_PRIMARY_PROTOCOL", "value": "openai"},
+                {"key": "LLM_PRIMARY_API_KEY", "value": "sk-test-value"},
+                {"key": "LLM_PRIMARY_MODELS", "value": "minimax/MiniMax-M1"},
+                {"key": "LLM_PRIMARY_ENABLED", "value": "false"},
+                {"key": "MINIMAX_API_KEY", "value": "minimax-secret"},
+                {"key": "LITELLM_MODEL", "value": "minimax/MiniMax-M1"},
+            ]
+        )
+
+        self.assertTrue(validation["valid"])
+        self.assertEqual(validation["issues"], [])
+
+    def test_validate_allows_openai_primary_model_with_local_base_url_and_no_key(self) -> None:
+        validation = self.service.validate(
+            items=[
+                {"key": "OPENAI_BASE_URL", "value": "http://127.0.0.1:11434/v1"},
+                {"key": "LITELLM_MODEL", "value": "openai/qwen3:8b"},
+            ]
+        )
+
+        self.assertTrue(validation["valid"])
+        self.assertEqual(validation["issues"], [])
 
     def test_validate_reports_stale_agent_primary_model_when_all_channels_disabled(self) -> None:
         validation = self.service.validate(
@@ -1017,6 +1044,54 @@ class SystemConfigServiceTestCase(unittest.TestCase):
 
         llm_check = next(check for check in status["checks"] if check["key"] == "llm_primary")
         self.assertEqual(llm_check["status"], "needs_action")
+
+    def test_get_setup_status_requires_direct_provider_key_for_explicit_primary_model(self) -> None:
+        self._rewrite_env(
+            "LITELLM_MODEL=openrouter/openai/gpt-4o-mini",
+            "STOCK_LIST=600519",
+        )
+
+        status = self.service.get_setup_status()
+
+        llm_check = next(check for check in status["checks"] if check["key"] == "llm_primary")
+        self.assertEqual(llm_check["status"], "needs_action")
+
+    def test_get_setup_status_accepts_direct_provider_key_for_explicit_primary_model(self) -> None:
+        self._rewrite_env(
+            "OPENROUTER_API_KEY=persisted-direct-secret",
+            "LITELLM_MODEL=openrouter/openai/gpt-4o-mini",
+            "STOCK_LIST=600519",
+        )
+
+        status = self.service.get_setup_status()
+
+        llm_check = next(check for check in status["checks"] if check["key"] == "llm_primary")
+        self.assertEqual(llm_check["status"], "configured")
+
+    def test_get_setup_status_skips_channel_models_without_usable_credentials(self) -> None:
+        self._rewrite_env(
+            "LLM_CHANNELS=primary",
+            "LLM_PRIMARY_PROTOCOL=openai",
+            "LLM_PRIMARY_MODELS=gpt-4o-mini",
+            "STOCK_LIST=600519",
+        )
+
+        status = self.service.get_setup_status()
+
+        llm_check = next(check for check in status["checks"] if check["key"] == "llm_primary")
+        self.assertEqual(llm_check["status"], "needs_action")
+
+    def test_get_setup_status_allows_local_openai_compatible_runtime_without_key(self) -> None:
+        self._rewrite_env(
+            "OPENAI_BASE_URL=http://127.0.0.1:11434/v1",
+            "LITELLM_MODEL=openai/qwen3:8b",
+            "STOCK_LIST=600519",
+        )
+
+        status = self.service.get_setup_status()
+
+        llm_check = next(check for check in status["checks"] if check["key"] == "llm_primary")
+        self.assertEqual(llm_check["status"], "configured")
 
     def test_validate_reports_invalid_event_rule_semantics(self) -> None:
         validation = self.service.validate(items=[{

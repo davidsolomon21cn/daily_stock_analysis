@@ -1688,7 +1688,12 @@ class SystemConfigService:
         return issues
 
     @staticmethod
-    def _collect_llm_channel_models_from_map(effective_map: Dict[str, str]) -> List[str]:
+    def _has_usable_api_key_value(value: str) -> bool:
+        """Return True when the raw env value contains at least one usable key."""
+        return bool([segment.strip() for segment in str(value or "").split(",") if segment.strip()])
+
+    @classmethod
+    def _collect_llm_channel_models_from_map(cls, effective_map: Dict[str, str]) -> List[str]:
         """Collect normalized model names from channel-style env values."""
         raw_channels = (effective_map.get("LLM_CHANNELS") or "").strip()
         if not raw_channels:
@@ -1713,6 +1718,21 @@ class SystemConfigService:
                 for model in (effective_map.get(f"{prefix}_MODELS") or "").split(",")
                 if model.strip()
             ]
+            validation_issues = cls._validate_llm_channel_definition(
+                channel_name=name,
+                protocol_value=protocol_value,
+                base_url_value=base_url_value,
+                api_key_value=(
+                    (effective_map.get(f"{prefix}_API_KEYS") or "").strip()
+                    or (effective_map.get(f"{prefix}_API_KEY") or "").strip()
+                ),
+                model_values=raw_models,
+                enabled=enabled,
+                field_prefix=prefix,
+                require_complete=True,
+            )
+            if any(issue["severity"] == "error" for issue in validation_issues):
+                continue
             resolved_protocol = resolve_llm_channel_protocol(protocol_value, base_url=base_url_value, models=raw_models, channel_name=name)
             for model in raw_models:
                 normalized_model = normalize_llm_channel_model(model, resolved_protocol, base_url_value)
@@ -1739,40 +1759,52 @@ class SystemConfigService:
             return []
         return get_configured_llm_models(Config._parse_litellm_yaml(config_path))
 
-    @staticmethod
-    def _has_legacy_key_for_provider(provider: str, effective_map: Dict[str, str]) -> bool:
+    @classmethod
+    def _has_legacy_key_for_provider(cls, provider: str, effective_map: Dict[str, str]) -> bool:
         """Return True when legacy env config can still back the provider."""
         normalized_provider = canonicalize_llm_channel_protocol(provider)
         if normalized_provider in {"gemini", "vertex_ai"}:
-            return bool(
+            return cls._has_usable_api_key_value(
                 (effective_map.get("GEMINI_API_KEYS") or "").strip()
                 or (effective_map.get("GEMINI_API_KEY") or "").strip()
             )
         if normalized_provider == "anthropic":
-            return bool(
+            return cls._has_usable_api_key_value(
                 (effective_map.get("ANTHROPIC_API_KEYS") or "").strip()
                 or (effective_map.get("ANTHROPIC_API_KEY") or "").strip()
             )
         if normalized_provider == "deepseek":
-            return bool(
+            return cls._has_usable_api_key_value(
                 (effective_map.get("DEEPSEEK_API_KEYS") or "").strip()
                 or (effective_map.get("DEEPSEEK_API_KEY") or "").strip()
             )
         if normalized_provider == "openai":
-            return bool(
+            return cls._has_usable_api_key_value(
                 (effective_map.get("OPENAI_API_KEYS") or "").strip()
                 or (effective_map.get("AIHUBMIX_KEY") or "").strip()
                 or (effective_map.get("OPENAI_API_KEY") or "").strip()
             )
         return False
 
-    @staticmethod
-    def _has_runtime_source_for_model(model: str, effective_map: Dict[str, str]) -> bool:
+    @classmethod
+    def _has_runtime_source_for_model(cls, model: str, effective_map: Dict[str, str]) -> bool:
         """Whether the selected model still has a backing runtime source."""
-        if not model or _uses_direct_env_provider(model):
-            return True
-        provider = _get_litellm_provider(model)
-        return SystemConfigService._has_legacy_key_for_provider(provider, effective_map)
+        normalized_model = (model or "").strip()
+        if not normalized_model:
+            return False
+
+        provider = _get_litellm_provider(normalized_model)
+        if not provider:
+            return False
+
+        for env_key in cls._api_key_candidates_for_provider(provider):
+            if cls._has_usable_api_key_value((effective_map.get(env_key) or "").strip()):
+                return True
+
+        provider_base_url = ""
+        if canonicalize_llm_channel_protocol(provider) == "openai":
+            provider_base_url = (effective_map.get("OPENAI_BASE_URL") or "").strip()
+        return channel_allows_empty_api_key(provider, provider_base_url)
 
     @staticmethod
     def _validate_llm_runtime_selection(effective_map: Dict[str, str]) -> List[Dict[str, Any]]:
