@@ -87,6 +87,8 @@ def _resolve_asset_path(assets_dir: Path, asset_path: str) -> Optional[Path]:
     decoded_path = unquote(asset_path)
     if not decoded_path or decoded_path.startswith(("/", "\\")):
         return None
+    if "\x00" in decoded_path:
+        return None
     if "\\" in decoded_path:
         return None
     if ":" in decoded_path.split("/", 1)[0]:

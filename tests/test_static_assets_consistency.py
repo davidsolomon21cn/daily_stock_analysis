@@ -242,6 +242,7 @@ def test_existing_asset_supports_head_and_conditional_requests(tmp_path: Path) -
         "/assets/C:%5Csecret.txt",
         "/assets/%5Cwindows%5Csystem32%5Cconfig",
         "/assets/%2e%2e/%2e%2e/secret.txt",
+        "/assets/%2500.js",
     ],
 )
 def test_asset_traversal_attempts_are_rejected(
