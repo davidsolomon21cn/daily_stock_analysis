@@ -40,8 +40,8 @@ LITELLM_MODEL=openai/deepseek-ai/DeepSeek-V3
 # 填入你在 DeepSeek 官方平台申请的 API Key
 DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxx
 ```
-*提示：仅需这一行，系统会自动识别并默认使用 `deepseek/deepseek-v4-flash`。*
-`deepseek-chat` / `deepseek-reasoner` 仍可用于兼容旧配置，但 DeepSeek 官方已标记为 2026/07/24 后废弃，新配置建议直接使用 `deepseek-v4-flash` / `deepseek-v4-pro`。
+*兼容提示：仅填这一行时，系统仍会默认使用 `deepseek/deepseek-chat` 并在日志提示迁移。*
+`deepseek-chat` / `deepseek-reasoner` 仍可用于兼容旧配置，但 DeepSeek 官方已标记为 2026/07/24 后废弃；新配置建议通过 Web 快速渠道或显式 `LITELLM_MODEL=deepseek/deepseek-v4-flash` 迁移到 `deepseek-v4-flash` / `deepseek-v4-pro`。
 
 ### 示例 3：使用 Gemini 免费 API
 ```env

@@ -189,7 +189,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     # ------------------------------------------------------------------
     "DEEPSEEK_API_KEY": {
         "title": "DeepSeek API Key",
-        "description": "Official DeepSeek API key (from https://platform.deepseek.com). Auto-infers deepseek/deepseek-v4-flash when set alone. Also works in multi-channel mode.",
+        "description": "Official DeepSeek API key (from https://platform.deepseek.com). For compatibility, a key set alone still auto-infers deepseek/deepseek-chat and logs a deprecation warning; new configs should migrate to deepseek/deepseek-v4-flash. Also works in multi-channel mode.",
         "category": "ai_model",
         "data_type": "string",
         "ui_control": "password",
