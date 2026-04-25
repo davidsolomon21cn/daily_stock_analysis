@@ -94,7 +94,7 @@ test('preload falls back to empty version when BrowserWindow does not pass one',
   assert.equal(preloadModule.readDesktopVersion(['--unrelated=1']), '');
 });
 
-test('createDesktopBridge delegates update actions to ipcRenderer', async () => {
+test('createDesktopBridge delegates update actions to ipcRenderer', async (t) => {
   const originalLoad = Module._load;
   const listeners = new Map();
   const ipcRenderer = {
@@ -110,6 +110,12 @@ test('createDesktopBridge delegates update actions to ipcRenderer', async () => 
     },
   };
 
+  const preloadPath = require.resolve('../preload.js');
+  t.after(() => {
+    Module._load = originalLoad;
+    delete require.cache[preloadPath];
+  });
+
   Module._load = function patchedLoad(request, parent, isMain) {
     if (request === 'electron') {
       return {
@@ -122,7 +128,6 @@ test('createDesktopBridge delegates update actions to ipcRenderer', async () => 
     return originalLoad.call(this, request, parent, isMain);
   };
 
-  const preloadPath = require.resolve('../preload.js');
   delete require.cache[preloadPath];
   const preloadModule = require('../preload.js');
   const desktopBridge = preloadModule.createDesktopBridge({
@@ -152,7 +157,4 @@ test('createDesktopBridge delegates update actions to ipcRenderer', async () => 
 
   assert.deepEqual(receivedPayloads, [{ status: 'update-available' }]);
   assert.equal(listeners.has(preloadModule.DESKTOP_UPDATE_STATE_EVENT), false);
-
-  Module._load = originalLoad;
-  delete require.cache[preloadPath];
 });

@@ -132,6 +132,7 @@ function buildUpdateState(state = {}) {
         ? state.releaseUrl.trim()
         : RELEASES_PAGE_URL,
     checkedAt: typeof state.checkedAt === 'string' ? state.checkedAt : '',
+    publishedAt: typeof state.publishedAt === 'string' ? state.publishedAt : '',
     message: typeof state.message === 'string' ? state.message : '',
     releaseName: typeof state.releaseName === 'string' ? state.releaseName : '',
     tagName: typeof state.tagName === 'string' ? state.tagName : '',
@@ -202,7 +203,8 @@ function evaluateReleaseUpdate({ currentVersion, release, checkedAt = new Date()
       currentVersion: normalizedCurrentVersion,
       latestVersion: releaseMetadata.version,
       releaseUrl: releaseMetadata.releaseUrl,
-      checkedAt: releaseMetadata.publishedAt || checkedAt,
+      checkedAt,
+      publishedAt: releaseMetadata.publishedAt,
       releaseName: releaseMetadata.releaseName,
       tagName: releaseMetadata.tagName,
       message: `发现新版本 ${releaseMetadata.version}，可前往 GitHub Releases 下载更新。`,
@@ -214,7 +216,8 @@ function evaluateReleaseUpdate({ currentVersion, release, checkedAt = new Date()
     currentVersion: normalizedCurrentVersion,
     latestVersion: releaseMetadata.version,
     releaseUrl: releaseMetadata.releaseUrl,
-    checkedAt: releaseMetadata.publishedAt || checkedAt,
+    checkedAt,
+    publishedAt: releaseMetadata.publishedAt,
     releaseName: releaseMetadata.releaseName,
     tagName: releaseMetadata.tagName,
     message: '当前桌面端已是最新版本。',
@@ -227,6 +230,41 @@ function fetchLatestReleaseJson({
   request = https.request,
 } = {}) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let response = null;
+
+    const cleanupResponseListeners = () => {
+      if (!response) {
+        return;
+      }
+      response.removeAllListeners('data');
+      response.removeAllListeners('end');
+      response.removeAllListeners('error');
+      response.removeAllListeners('aborted');
+      response.removeAllListeners('close');
+    };
+
+    const finishWithError = (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanupResponseListeners();
+      if (!req.destroyed) {
+        req.destroy();
+      }
+      reject(error instanceof Error ? error : new Error(String(error)));
+    };
+
+    const finishWithResult = (value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanupResponseListeners();
+      resolve(value);
+    };
+
     const req = request(
       requestUrl,
       {
@@ -236,7 +274,8 @@ function fetchLatestReleaseJson({
           'User-Agent': 'daily-stock-analysis-desktop',
         },
       },
-      (response) => {
+      (incomingResponse) => {
+        response = incomingResponse;
         const chunks = [];
 
         response.on('data', (chunk) => {
@@ -244,16 +283,31 @@ function fetchLatestReleaseJson({
         });
 
         response.on('end', () => {
+          if (settled) {
+            return;
+          }
           const body = Buffer.concat(chunks).toString('utf-8');
           if (response.statusCode !== 200) {
-            reject(new Error(`GitHub API responded with status ${response.statusCode || 'unknown'}`));
+            finishWithError(new Error(`GitHub API responded with status ${response.statusCode || 'unknown'}`));
             return;
           }
 
           try {
-            resolve(JSON.parse(body));
+            finishWithResult(JSON.parse(body));
           } catch (_error) {
-            reject(new Error('Failed to parse GitHub release response.'));
+            finishWithError(new Error('Failed to parse GitHub release response.'));
+          }
+        });
+
+        response.on('error', (error) => {
+          finishWithError(error);
+        });
+        response.on('aborted', () => {
+          finishWithError(new Error('GitHub API response was aborted.'));
+        });
+        response.on('close', () => {
+          if (!response.complete) {
+            finishWithError(new Error('GitHub API response closed before completion.'));
           }
         });
       }
@@ -262,7 +316,7 @@ function fetchLatestReleaseJson({
     req.setTimeout(timeoutMs, () => {
       req.destroy(new Error(`GitHub API timeout after ${timeoutMs}ms`));
     });
-    req.on('error', reject);
+    req.on('error', finishWithError);
     req.end();
   });
 }
@@ -686,10 +740,11 @@ function sanitizeReleaseUrl(candidateUrl) {
 
   try {
     const parsed = new URL(candidateUrl.trim());
+    const allowedReleasePathPrefix = `/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
     const isGithubHost = parsed.origin === 'https://github.com';
     const isRepositoryReleasePath =
-      parsed.pathname === '/ZhuLinsen/daily_stock_analysis/releases' ||
-      parsed.pathname.startsWith('/ZhuLinsen/daily_stock_analysis/releases/');
+      parsed.pathname === allowedReleasePathPrefix ||
+      parsed.pathname.startsWith(`${allowedReleasePathPrefix}/`);
     return isGithubHost && isRepositoryReleasePath ? parsed.toString() : RELEASES_PAGE_URL;
   } catch (_error) {
     return RELEASES_PAGE_URL;

@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const Module = require('node:module');
+const { EventEmitter } = require('node:events');
 
 function loadMainModule(t) {
   const originalLoad = Module._load;
@@ -105,6 +106,8 @@ test('evaluateReleaseUpdate reports update-available when release is newer', (t)
   assert.equal(state.currentVersion, '3.12.0');
   assert.equal(state.latestVersion, '3.13.0');
   assert.equal(state.releaseUrl, 'https://github.com/ZhuLinsen/daily_stock_analysis/releases/tag/v3.13.0');
+  assert.equal(state.checkedAt, '2026-04-25T01:02:00Z');
+  assert.equal(state.publishedAt, '2026-04-25T01:00:00Z');
   assert.match(state.message, /发现新版本 3\.13\.0/);
 });
 
@@ -122,6 +125,8 @@ test('evaluateReleaseUpdate reports up-to-date when version is current', (t) => 
   assert.equal(state.status, mainModule.UPDATE_STATUS.UP_TO_DATE);
   assert.equal(state.latestVersion, '3.13.0');
   assert.equal(state.releaseUrl, 'https://github.com/ZhuLinsen/daily_stock_analysis/releases/tag/v3.13.0');
+  assert.equal(state.checkedAt, '2026-04-25T01:02:00Z');
+  assert.equal(state.publishedAt, '');
 });
 
 test('evaluateReleaseUpdate reports error when current version is invalid', (t) => {
@@ -161,7 +166,45 @@ test('sanitizeReleaseUrl falls back for non-release links', (t) => {
     mainModule.RELEASES_PAGE_URL
   );
   assert.equal(
-    mainModule.sanitizeReleaseUrl('https://github.com/ZhuLinsen/daily_stock_analysis/releases/tag/v3.13.0'),
-    'https://github.com/ZhuLinsen/daily_stock_analysis/releases/tag/v3.13.0'
+    mainModule.sanitizeReleaseUrl(
+      `https://github.com/${mainModule.GITHUB_OWNER}/${mainModule.GITHUB_REPO}/releases/tag/v3.13.0`
+    ),
+    `https://github.com/${mainModule.GITHUB_OWNER}/${mainModule.GITHUB_REPO}/releases/tag/v3.13.0`
   );
+});
+
+test('fetchLatestReleaseJson rejects when response stream errors', async (t) => {
+  const mainModule = loadMainModule(t);
+  const response = new EventEmitter();
+  response.statusCode = 200;
+  response.complete = false;
+  let destroyed = false;
+
+  const request = () => {
+    const req = new EventEmitter();
+    req.destroyed = false;
+    req.setTimeout = () => undefined;
+    req.destroy = () => {
+      destroyed = true;
+      req.destroyed = true;
+    };
+    req.end = () => {
+      process.nextTick(() => {
+        request.onResponse(response);
+        response.emit('error', new Error('stream failed'));
+      });
+    };
+    return req;
+  };
+  request.onResponse = () => undefined;
+
+  const pending = mainModule.fetchLatestReleaseJson({
+    request: (_url, _options, onResponse) => {
+      request.onResponse = onResponse;
+      return request();
+    },
+  });
+
+  await assert.rejects(pending, /stream failed/);
+  assert.equal(destroyed, true);
 });

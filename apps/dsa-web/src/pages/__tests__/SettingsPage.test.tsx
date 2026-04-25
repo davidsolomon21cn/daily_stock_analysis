@@ -402,6 +402,41 @@ describe('SettingsPage', () => {
     expect(versionGrid).not.toHaveClass('md:grid-cols-4');
   });
 
+  it('ignores non-string desktop runtime version values without breaking render', async () => {
+    (window as { dsaDesktop?: unknown }).dsaDesktop = { version: 3120 };
+
+    render(<SettingsPage />);
+
+    const section = (await screen.findByRole('heading', { name: '版本信息' })).closest('section');
+    const versionGrid = section?.querySelector('div.grid.grid-cols-1.gap-3');
+
+    expect(screen.queryByText('桌面端版本')).not.toBeInTheDocument();
+    expect(versionGrid).toHaveClass('md:grid-cols-3');
+  });
+
+  it('normalizes malformed desktop update payloads instead of throwing', async () => {
+    desktopGetUpdateState.mockResolvedValue({
+      status: 123,
+      currentVersion: 3120,
+      latestVersion: null,
+      releaseUrl: { href: 'https://example.com' },
+      checkedAt: ['2026-04-25T01:02:00Z'],
+      message: false,
+      releaseName: { text: 'v3.13.0' },
+      tagName: undefined,
+    });
+    (window as { dsaDesktop?: unknown }).dsaDesktop = createDesktopRuntime();
+
+    render(<SettingsPage />);
+
+    await waitFor(() => {
+      expect(desktopGetUpdateState).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByRole('button', { name: '检查更新' })).toBeInTheDocument();
+    expect(screen.queryByText('检查更新失败')).not.toBeInTheDocument();
+    expect(screen.queryByText('发现新版本')).not.toBeInTheDocument();
+  });
+
   it('falls back to build identifier when package version is still placeholder', () => {
     expect(resolveWebBuildInfo({
       packageVersion: '0.0.0',

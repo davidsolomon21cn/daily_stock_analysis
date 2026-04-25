@@ -21,11 +21,11 @@ import type { SystemConfigCategory } from '../types/systemConfig';
 
 type DesktopWindow = Window & {
   dsaDesktop?: {
-    version?: string;
-    getUpdateState?: () => Promise<DesktopUpdateState>;
-    checkForUpdates?: () => Promise<DesktopUpdateState>;
+    version?: unknown;
+    getUpdateState?: () => Promise<RawDesktopUpdateState>;
+    checkForUpdates?: () => Promise<RawDesktopUpdateState>;
     openReleasePage?: (releaseUrl?: string) => Promise<boolean>;
-    onUpdateStateChange?: (listener: (state: DesktopUpdateState) => void) => (() => void) | void;
+    onUpdateStateChange?: (listener: (state: RawDesktopUpdateState) => void) => (() => void) | void;
   };
 };
 
@@ -35,10 +35,27 @@ type DesktopUpdateState = {
   latestVersion?: string;
   releaseUrl?: string;
   checkedAt?: string;
+  publishedAt?: string;
   message?: string;
   releaseName?: string;
   tagName?: string;
 };
+
+type RawDesktopUpdateState = {
+  status?: unknown;
+  currentVersion?: unknown;
+  latestVersion?: unknown;
+  releaseUrl?: unknown;
+  checkedAt?: unknown;
+  publishedAt?: unknown;
+  message?: unknown;
+  releaseName?: unknown;
+  tagName?: unknown;
+};
+
+function trimDesktopRuntimeString(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
 
 function getDesktopRuntimeApi() {
   if (typeof window === 'undefined') {
@@ -49,23 +66,24 @@ function getDesktopRuntimeApi() {
 }
 
 function getDesktopAppVersion() {
-  return getDesktopRuntimeApi()?.version?.trim() || '';
+  return trimDesktopRuntimeString(getDesktopRuntimeApi()?.version);
 }
 
-function normalizeDesktopUpdateState(state: DesktopUpdateState | null | undefined) {
+function normalizeDesktopUpdateState(state: RawDesktopUpdateState | null | undefined) {
   if (!state || typeof state !== 'object') {
     return null;
   }
 
   return {
-    status: state.status?.trim() || 'idle',
-    currentVersion: state.currentVersion?.trim() || '',
-    latestVersion: state.latestVersion?.trim() || '',
-    releaseUrl: state.releaseUrl?.trim() || '',
-    checkedAt: state.checkedAt?.trim() || '',
-    message: state.message?.trim() || '',
-    releaseName: state.releaseName?.trim() || '',
-    tagName: state.tagName?.trim() || '',
+    status: trimDesktopRuntimeString(state.status) || 'idle',
+    currentVersion: trimDesktopRuntimeString(state.currentVersion),
+    latestVersion: trimDesktopRuntimeString(state.latestVersion),
+    releaseUrl: trimDesktopRuntimeString(state.releaseUrl),
+    checkedAt: trimDesktopRuntimeString(state.checkedAt),
+    publishedAt: trimDesktopRuntimeString(state.publishedAt),
+    message: trimDesktopRuntimeString(state.message),
+    releaseName: trimDesktopRuntimeString(state.releaseName),
+    tagName: trimDesktopRuntimeString(state.tagName),
   };
 }
 
