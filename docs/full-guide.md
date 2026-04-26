@@ -309,6 +309,7 @@ daily_stock_analysis/
 > - 官方 quickstart 已文档化 `quotes.get(universes=["CN_Equity_A"])`，但线上 smoke test 进一步确认：`TICKFLOW_API_KEY` 不等于一定具备该权限，且 `quotes.get(symbols=[...])` 单次存在标的数量限制。
 > - TickFlow 实际返回的 `change_pct` / `amplitude` 为比例值；系统已在接入层统一转换为百分比值，确保与现有数据源字段语义一致。
 > - A 股大盘复盘报告采用盘后工作台式结构：固定包含盘面温度、指数明细、板块 Top 表、新闻催化、明日交易计划和风险提示；若部分数据源缺失，则保留可用区块并在对应位置降级展示。
+> - 在上述固定结构之后，系统会仅对 A 股复盘追加“热门板块 / 热门股票”摘要：热门板块按当日涨跌幅 Top N 排序，热门股票按当日涨跌幅优先、成交额次排序（剔除 ETF）；若板块或个股任一数据源缺失，则仅跳过对应追加区块，不影响原有复盘正文和其他区块输出。
 > - 字段契约：
 >   - `fundamental_context.belong_boards` = 个股关联板块列表（当前仅 A 股写入；无数据时为 `[]`）；
 >   - `fundamental_context.boards.data` = `sector_rankings`（板块涨跌榜，结构 `{top, bottom}`）；

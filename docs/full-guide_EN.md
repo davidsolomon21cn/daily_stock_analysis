@@ -301,6 +301,7 @@ Default schedule: Every weekday at **18:00 (Beijing Time)** automatic execution.
 > - The official quickstart documents `quotes.get(universes=["CN_Equity_A"])`, but online smoke tests confirmed two additional real-world constraints: universe access depends on plan permissions, and `quotes.get(symbols=[...])` has a per-request symbol limit.
 > - TickFlow currently returns `change_pct` / `amplitude` as ratio values; this integration normalizes them to the project's percent convention so they match AkShare / Tushare / efinance semantics.
 > - CN market review reports now use a post-market workstation layout with fixed market-temperature, index detail, sector Top tables, news catalysts, next-session plan, and risk sections. Missing data sources degrade by omitting or simplifying only the affected block.
+> - After the fixed CN market review structure, the system appends optional `Hot Sectors` / `Hot Stocks` blocks for A-shares only: sectors are ranked by daily change percentage Top N, while stocks are ranked by daily change percentage first and turnover second (ETF excluded). If either sector or stock data is unavailable, only that appendix block is skipped and the original market review body remains unchanged.
 > - Per-stock analysis, realtime quote priority, and sector rankings fallback remain unchanged.
 
 ---
