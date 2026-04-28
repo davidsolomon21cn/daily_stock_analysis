@@ -322,7 +322,7 @@ def _sanitize_trend_analysis_for_prompt(
     *,
     volume_change_ratio: Any = None,
 ) -> Dict[str, Any]:
-    """Clean contradictory trend hints before they are injected into the LLM prompt."""
+    """Clean prompt-only trend hints on a derived copy without touching runtime/provider config."""
     trend_dict = dict(trend) if isinstance(trend, dict) else {}
     signal_reasons = _normalize_prompt_reason_items(trend_dict.get("signal_reasons"))
     risk_factors = _normalize_prompt_reason_items(trend_dict.get("risk_factors"))

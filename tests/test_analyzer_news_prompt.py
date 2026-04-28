@@ -12,7 +12,13 @@ except ModuleNotFoundError:
 
     ensure_litellm_stub()
 
-from src.analyzer import GeminiAnalyzer, _BULLISH_TREND_HINTS, _contains_trend_hint, _infer_trend_direction
+from src.analyzer import (
+    GeminiAnalyzer,
+    _BULLISH_TREND_HINTS,
+    _contains_trend_hint,
+    _infer_trend_direction,
+    _sanitize_trend_analysis_for_prompt,
+)
 
 
 class AnalyzerNewsPromptTestCase(unittest.TestCase):
@@ -310,6 +316,25 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
         self.assertNotIn("多头排列，持续上涨", prompt)
         self.assertIn("事件催化存在但技术待确认", prompt)
         self.assertIn("已剔除与空头主判断直接冲突的看多结构理由", prompt)
+
+    def test_sanitize_trend_analysis_for_prompt_returns_derived_copy_only(self) -> None:
+        original = {
+            "trend_status": "空头排列",
+            "ma_alignment": "空头排列 MA5<MA10<MA20",
+            "signal_reasons": ["多头排列，持续上涨", "事件催化存在但技术待确认"],
+            "risk_factors": ["跌破MA20，趋势承压"],
+        }
+
+        sanitized = _sanitize_trend_analysis_for_prompt(original, volume_change_ratio=12.4)
+
+        self.assertEqual(
+            original["signal_reasons"],
+            ["多头排列，持续上涨", "事件催化存在但技术待确认"],
+        )
+        self.assertNotIn("prompt_consistency_notes", original)
+        self.assertNotIn("prompt_trend_direction", original)
+        self.assertNotIn("多头排列，持续上涨", sanitized["signal_reasons"])
+        self.assertEqual(sanitized["prompt_trend_direction"], "bearish")
 
 
 if __name__ == "__main__":
