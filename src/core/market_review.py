@@ -120,6 +120,7 @@ def run_market_review(
         merge_notification: 是否合并推送（跳过本次推送，由 main 层合并个股+大盘后统一发送，Issue #190）
         override_region:
             覆盖 config 的 market_review_region（Issue #373 交易日过滤后有效子集）。
+            未传入时沿用配置值，并保持既有配置/force-run 语义，不在此处额外收敛 both。
             显式传入 None 时，沿用配置值但跳过本函数内对 both 的交易日过滤。
             both 表示多市场全集，可能在主流程中被收敛为 cn/hk/us 或逗号拼接子集。
 
@@ -133,7 +134,7 @@ def run_market_review(
     configured_region = getattr(config, 'market_review_region', 'cn') or 'cn'
     if override_region is _OVERRIDE_REGION_UNSET:
         region = configured_region
-        restrict_to_open_markets = True
+        restrict_to_open_markets = False
     elif override_region is None:
         region = configured_region
         restrict_to_open_markets = False

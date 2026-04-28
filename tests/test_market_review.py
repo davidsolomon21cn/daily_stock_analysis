@@ -177,7 +177,41 @@ class MarketReviewLocalizationTestCase(unittest.TestCase):
         self.assertNotIn("美股", result)
         self.assertNotIn("US Market", result)
 
-    def test_run_market_review_both_uses_open_markets_subset(self) -> None:
+    def test_run_market_review_both_without_override_keeps_configured_full_market_set(self) -> None:
+        notifier = self._make_notifier()
+        cn_analyzer = MagicMock()
+        cn_analyzer.run_daily_review.return_value = "CN body"
+        hk_analyzer = MagicMock()
+        hk_analyzer.run_daily_review.return_value = "HK body"
+        us_analyzer = MagicMock()
+        us_analyzer.run_daily_review.return_value = "US body"
+        hotspot_service = MagicMock()
+        hotspot_service.build_markdown.return_value = ""
+
+        with patch.object(
+            market_review_module,
+            "get_config",
+            return_value=SimpleNamespace(report_language="zh", market_review_region="both"),
+        ), patch.object(
+            market_review_module,
+            "get_open_markets_today",
+            return_value={"cn", "hk"},
+        ), patch.object(
+            market_review_module,
+            "MarketAnalyzer",
+            side_effect=[cn_analyzer, hk_analyzer, us_analyzer],
+        ), patch.object(
+            market_review_module,
+            "MarketReviewHotspotService",
+            return_value=hotspot_service,
+        ):
+            result = run_market_review(notifier, send_notification=False)
+
+        self.assertIn("# A股大盘复盘\n\nCN body", result)
+        self.assertIn("# 港股大盘复盘\n\nHK body", result)
+        self.assertIn("# 美股大盘复盘\n\nUS body", result)
+
+    def test_run_market_review_explicit_both_override_uses_open_markets_subset(self) -> None:
         notifier = self._make_notifier()
         cn_analyzer = MagicMock()
         cn_analyzer.run_daily_review.return_value = "CN body"
@@ -205,7 +239,11 @@ class MarketReviewLocalizationTestCase(unittest.TestCase):
             "MarketReviewHotspotService",
             return_value=hotspot_service,
         ):
-            result = run_market_review(notifier, send_notification=False)
+            result = run_market_review(
+                notifier,
+                send_notification=False,
+                override_region="both",
+            )
 
         self.assertIn("# A股大盘复盘\n\nCN body", result)
         self.assertIn("# 港股大盘复盘\n\nHK body", result)
