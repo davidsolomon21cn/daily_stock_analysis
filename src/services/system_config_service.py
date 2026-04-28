@@ -547,6 +547,7 @@ class SystemConfigService:
         if errors:
             raise ConfigValidationError(issues=errors)
 
+        previous_map = self._manager.read_config_map()
         submitted_keys: Set[str] = set()
         updates: List[Tuple[str, str]] = []
         sensitive_keys: Set[str] = set()
@@ -584,6 +585,12 @@ class SystemConfigService:
             self._build_explainability_warnings(
                 submitted_keys=submitted_keys,
                 reload_now=reload_now,
+            )
+        )
+        warnings.extend(
+            self._build_runtime_model_cleanup_warnings(
+                previous_map=previous_map,
+                updates=dict(updates),
             )
         )
 
@@ -678,6 +685,53 @@ class SystemConfigService:
             )
 
         return warnings
+
+    @staticmethod
+    def _build_runtime_model_cleanup_warnings(
+        *,
+        previous_map: Dict[str, str],
+        updates: Dict[str, str],
+    ) -> List[str]:
+        """Explain when save payload clears stale runtime model references."""
+        runtime_labels = {
+            "LITELLM_MODEL": "主模型",
+            "AGENT_LITELLM_MODEL": "Agent 主模型",
+            "VISION_MODEL": "Vision 模型",
+        }
+        cleared_labels: List[str] = []
+        for key, label in runtime_labels.items():
+            if previous_map.get(key, "").strip() and key in updates and not updates[key].strip():
+                cleared_labels.append(label)
+
+        removed_fallbacks: List[str] = []
+        if "LITELLM_FALLBACK_MODELS" in updates:
+            previous_fallbacks = [
+                item.strip()
+                for item in previous_map.get("LITELLM_FALLBACK_MODELS", "").split(",")
+                if item.strip()
+            ]
+            next_fallbacks = {
+                item.strip()
+                for item in updates["LITELLM_FALLBACK_MODELS"].split(",")
+                if item.strip()
+            }
+            removed_fallbacks = [item for item in previous_fallbacks if item not in next_fallbacks]
+
+        if not cleared_labels and not removed_fallbacks:
+            return []
+
+        cleaned_targets = list(cleared_labels)
+        if removed_fallbacks:
+            cleaned_targets.append("备选模型中的失效项")
+
+        cleaned_text = " / ".join(cleaned_targets)
+        warning = (
+            f"检测到已同步清理失效的运行时模型引用：{cleaned_text}。"
+            "如需恢复，请先补回对应渠道模型列表后重新选择；"
+            "也可用桌面端导出备份或手动 .env 还原之前的 LLM_* / "
+            "LITELLM_MODEL / AGENT_LITELLM_MODEL / VISION_MODEL / LLM_TEMPERATURE。"
+        )
+        return [warning]
 
     def apply_simple_updates(
         self,

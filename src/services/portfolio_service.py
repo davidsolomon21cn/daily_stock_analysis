@@ -1115,14 +1115,17 @@ class PortfolioService:
             hk_digits = normalized[2:]
             if hk_digits.isdigit() and len(hk_digits) == 5:
                 legacy_hk_digits = str(int(hk_digits))
+                _add(legacy_hk_digits)
                 _add(f"HK{legacy_hk_digits}")
                 _add(f"{hk_digits}.HK")
+                _add(f"{legacy_hk_digits}.HK")
         if normalized.isdigit():
             if len(normalized) == 6:
                 _add(f"SH{normalized}")
                 _add(f"SZ{normalized}")
                 _add(f"BJ{normalized}")
                 _add(f"{normalized}.SH")
+                _add(f"{normalized}.SS")
                 _add(f"{normalized}.SZ")
                 _add(f"{normalized}.BJ")
             elif len(normalized) == 5:

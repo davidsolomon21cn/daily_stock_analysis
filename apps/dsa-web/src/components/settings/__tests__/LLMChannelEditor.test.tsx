@@ -174,6 +174,50 @@ describe('LLMChannelEditor', () => {
     );
   });
 
+  it('shows cleanup warning and restore path after stale runtime models are removed on save', async () => {
+    update.mockResolvedValue({
+      success: true,
+      configVersion: 'v2',
+      appliedCount: 1,
+      skippedMaskedCount: 0,
+      reloadTriggered: true,
+      updatedKeys: ['LLM_DEEPSEEK_MODELS', 'LITELLM_MODEL'],
+      warnings: [
+        '检测到已同步清理失效的运行时模型引用：主模型 / Agent 主模型 / Vision 模型 / 备选模型中的失效项。如需恢复，请先补回对应渠道模型列表后重新选择；也可用桌面端导出备份或手动 .env 还原之前的 LLM_* / LITELLM_MODEL / AGENT_LITELLM_MODEL / VISION_MODEL / LLM_TEMPERATURE。',
+      ],
+    });
+
+    render(
+      <LLMChannelEditor
+        items={[
+          { key: 'LLM_CHANNELS', value: 'deepseek' },
+          { key: 'LLM_DEEPSEEK_PROTOCOL', value: 'deepseek' },
+          { key: 'LLM_DEEPSEEK_BASE_URL', value: 'https://api.deepseek.com' },
+          { key: 'LLM_DEEPSEEK_ENABLED', value: 'true' },
+          { key: 'LLM_DEEPSEEK_API_KEY', value: 'sk-test' },
+          { key: 'LLM_DEEPSEEK_MODELS', value: 'deepseek-chat,deepseek-reasoner' },
+          { key: 'LITELLM_MODEL', value: 'deepseek/deepseek-chat' },
+          { key: 'AGENT_LITELLM_MODEL', value: 'deepseek/deepseek-reasoner' },
+          { key: 'LITELLM_FALLBACK_MODELS', value: 'deepseek/deepseek-v4-pro,deepseek/deepseek-chat' },
+          { key: 'VISION_MODEL', value: 'deepseek/deepseek-reasoner' },
+        ]}
+        configVersion="v1"
+        maskToken="******"
+        onSaved={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /DeepSeek 官方/i }));
+    fireEvent.change(screen.getByLabelText('模型（逗号分隔）'), {
+      target: { value: 'deepseek-v4-flash,deepseek-v4-pro' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
+
+    expect(await screen.findByText('保存后提示')).toBeInTheDocument();
+    expect(screen.getByText(/已同步清理失效的运行时模型引用/i)).toBeInTheDocument();
+    expect(screen.getByText(/桌面端导出备份或手动 \.env 还原/i)).toBeInTheDocument();
+  });
+
   it('keeps direct-env provider runtime models while saving channel changes', async () => {
     update.mockResolvedValue({
       success: true,

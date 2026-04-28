@@ -991,6 +991,41 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         self.assertIn("以 schedule 模式重新启动后生效", schedule_warning)
         self.assertNotIn("它属于启动期单次运行配置", schedule_warning)
 
+    def test_update_warns_when_runtime_model_references_are_cleared(self) -> None:
+        self._rewrite_env(
+            "STOCK_LIST=600519,000001",
+            "LLM_CHANNELS=deepseek",
+            "LLM_DEEPSEEK_PROTOCOL=deepseek",
+            "LLM_DEEPSEEK_BASE_URL=https://api.deepseek.com",
+            "LLM_DEEPSEEK_API_KEY=sk-test-value",
+            "LLM_DEEPSEEK_MODELS=deepseek-v4-flash,deepseek-v4-pro",
+            "LITELLM_MODEL=deepseek/deepseek-chat",
+            "AGENT_LITELLM_MODEL=deepseek/deepseek-reasoner",
+            "LITELLM_FALLBACK_MODELS=deepseek/deepseek-v4-pro,deepseek/deepseek-chat,cohere/command-r-plus",
+            "VISION_MODEL=deepseek/deepseek-reasoner",
+        )
+
+        response = self.service.update(
+            config_version=self.manager.get_config_version(),
+            items=[
+                {"key": "LLM_DEEPSEEK_MODELS", "value": "deepseek-v4-flash,deepseek-v4-pro"},
+                {"key": "LITELLM_MODEL", "value": ""},
+                {"key": "AGENT_LITELLM_MODEL", "value": ""},
+                {"key": "LITELLM_FALLBACK_MODELS", "value": "deepseek/deepseek-v4-pro,cohere/command-r-plus"},
+                {"key": "VISION_MODEL", "value": ""},
+            ],
+            reload_now=False,
+        )
+
+        self.assertTrue(response["success"])
+        warning = next(
+            warning
+            for warning in response["warnings"]
+            if "已同步清理失效的运行时模型引用" in warning
+        )
+        self.assertIn("主模型 / Agent 主模型 / Vision 模型 / 备选模型中的失效项", warning)
+        self.assertIn("桌面端导出备份", warning)
+
 
     def test_validate_rejects_comma_only_api_key(self) -> None:
         """Whitespace/comma-only api_key must fail validation (P2: parsed-segment check)."""

@@ -775,6 +775,19 @@ class PortfolioServiceTestCase(unittest.TestCase):
             fee=0,
             tax=0,
         )
+        self.service.repo.add_trade(
+            account_id=aid,
+            trade_uid="legacy-hk-short-suffix-trade",
+            symbol="700.HK",
+            market="hk",
+            currency="HKD",
+            trade_date=date(2026, 1, 4),
+            side="buy",
+            quantity=3,
+            price=415,
+            fee=0,
+            tax=0,
+        )
         self.service.repo.add_corporate_action(
             account_id=aid,
             symbol="HK700",
@@ -793,14 +806,23 @@ class PortfolioServiceTestCase(unittest.TestCase):
             action_type="cash_dividend",
             cash_dividend_per_share=1.5,
         )
+        self.service.repo.add_corporate_action(
+            account_id=aid,
+            symbol="700.HK",
+            market="hk",
+            currency="HKD",
+            effective_date=date(2026, 1, 6),
+            action_type="cash_dividend",
+            cash_dividend_per_share=2.0,
+        )
 
         trades = self.service.list_trade_events(account_id=aid, symbol="HK00700", page=1, page_size=20)
         actions = self.service.list_corporate_action_events(account_id=aid, symbol="HK00700", page=1, page_size=20)
 
-        self.assertEqual(trades["total"], 2)
-        self.assertEqual(actions["total"], 2)
-        self.assertEqual({item["symbol"] for item in trades["items"]}, {"HK700", "00700.HK"})
-        self.assertEqual({item["symbol"] for item in actions["items"]}, {"HK700", "00700.HK"})
+        self.assertEqual(trades["total"], 3)
+        self.assertEqual(actions["total"], 3)
+        self.assertEqual({item["symbol"] for item in trades["items"]}, {"HK700", "00700.HK", "700.HK"})
+        self.assertEqual({item["symbol"] for item in actions["items"]}, {"HK700", "00700.HK", "700.HK"})
 
     def test_portfolio_write_session_maps_sqlite_locked_error(self) -> None:
         repo = PortfolioRepository(db_manager=self.db)

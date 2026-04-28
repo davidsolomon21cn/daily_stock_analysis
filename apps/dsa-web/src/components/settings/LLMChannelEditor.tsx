@@ -893,6 +893,7 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
     | { type: 'local-error'; text: string }
     | null
   >(null);
+  const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
   const [visibleKeys, setVisibleKeys] = useState<Record<number, boolean>>({});
   const [testStates, setTestStates] = useState<Record<number, ChannelTestState>>({});
   const [discoveryStates, setDiscoveryStates] = useState<Record<string, ChannelDiscoveryState>>({});
@@ -920,6 +921,7 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
     setExpandedRows({});
     discoveryNonceRef.current = {};
     setSaveMessage(null);
+    setSaveWarnings([]);
     setIsCollapsed(false);
   }, [channelsFingerprint, runtimeFingerprint, initialChannels, initialRuntimeConfig]);
 
@@ -1107,18 +1109,21 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
 
     setIsSaving(true);
     setSaveMessage(null);
+    setSaveWarnings([]);
 
     try {
       const updateItems = channelsToUpdateItems(channels, initialNames, runtimeConfigForSave, managesRuntimeConfig);
-      await systemConfigApi.update({
+      const response = await systemConfigApi.update({
         configVersion,
         maskToken,
         reloadNow: true,
         items: updateItems,
       });
+      setSaveWarnings(response.warnings || []);
       setSaveMessage({ type: 'success', text: managesRuntimeConfig ? 'AI 配置已保存' : '渠道配置已保存' });
       await onSaved(updateItems);
     } catch (error: unknown) {
+      setSaveWarnings([]);
       setSaveMessage({ type: 'error', error: getParsedApiError(error) });
     } finally {
       setIsSaving(false);
@@ -1447,6 +1452,21 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
             <InlineAlert
               variant="success"
               message={saveMessage.text}
+              className="rounded-lg px-3 py-2 text-sm shadow-none"
+            />
+          ) : null}
+
+          {saveWarnings.length > 0 ? (
+            <InlineAlert
+              variant="warning"
+              title="保存后提示"
+              message={(
+                <div className="space-y-1">
+                  {saveWarnings.map((warning) => (
+                    <p key={warning}>{warning}</p>
+                  ))}
+                </div>
+              )}
               className="rounded-lg px-3 py-2 text-sm shadow-none"
             />
           ) : null}
