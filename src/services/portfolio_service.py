@@ -1116,8 +1116,12 @@ class PortfolioService:
                 _add(f"SH{normalized}")
                 _add(f"SZ{normalized}")
                 _add(f"BJ{normalized}")
+                _add(f"{normalized}.SH")
+                _add(f"{normalized}.SZ")
+                _add(f"{normalized}.BJ")
             elif len(normalized) == 5:
                 _add(f"HK{normalized}")
+                _add(f"{normalized}.HK")
         return values
 
     @staticmethod

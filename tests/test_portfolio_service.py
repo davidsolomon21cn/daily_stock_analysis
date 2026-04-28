@@ -710,6 +710,41 @@ class PortfolioServiceTestCase(unittest.TestCase):
         self.assertEqual(trades["items"][0]["symbol"], "SH600519")
         self.assertEqual(actions["items"][0]["symbol"], "SH600519")
 
+    def test_event_symbol_filters_match_legacy_suffix_symbols(self) -> None:
+        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        aid = account["id"]
+
+        self.service.repo.add_trade(
+            account_id=aid,
+            trade_uid="legacy-suffix-trade",
+            symbol="600519.SH",
+            market="cn",
+            currency="CNY",
+            trade_date=date(2026, 1, 2),
+            side="buy",
+            quantity=10,
+            price=100,
+            fee=0,
+            tax=0,
+        )
+        self.service.repo.add_corporate_action(
+            account_id=aid,
+            symbol="600519.SH",
+            market="cn",
+            currency="CNY",
+            effective_date=date(2026, 1, 3),
+            action_type="cash_dividend",
+            cash_dividend_per_share=1.0,
+        )
+
+        trades = self.service.list_trade_events(account_id=aid, symbol="600519", page=1, page_size=20)
+        actions = self.service.list_corporate_action_events(account_id=aid, symbol="600519", page=1, page_size=20)
+
+        self.assertEqual(trades["total"], 1)
+        self.assertEqual(actions["total"], 1)
+        self.assertEqual(trades["items"][0]["symbol"], "600519.SH")
+        self.assertEqual(actions["items"][0]["symbol"], "600519.SH")
+
     def test_portfolio_write_session_maps_sqlite_locked_error(self) -> None:
         repo = PortfolioRepository(db_manager=self.db)
         session = self.db.get_session()

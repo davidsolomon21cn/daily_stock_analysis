@@ -660,9 +660,13 @@ function getLlmErrorCodeLabel(code?: string | null): string {
   return LLM_ERROR_LABELS[code || ''] || '测试失败';
 }
 
-function getLlmTroubleshootingHint(code?: string | null, stage?: string | null): string | undefined {
+function getLlmTroubleshootingHint(
+  code?: string | null,
+  stage?: string | null,
+  context: 'test' | 'discovery' = 'test',
+): string | undefined {
   if (code === 'format_error') {
-    return stage === 'model_discovery'
+    return context === 'discovery' || stage === 'model_discovery'
       ? '该渠道返回的 /models 响应格式不兼容，请改为手动填写模型列表。'
       : '返回结构与预期不一致，请确认该渠道兼容 Chat Completions 接口。';
   }
@@ -1140,7 +1144,7 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
       const text = result.success
         ? `连接成功${result.resolvedModel ? ` · ${result.resolvedModel}` : ''}${result.latencyMs ? ` · ${result.latencyMs} ms` : ''}`
         : buildLlmFailureText(result);
-      const hint = result.success ? undefined : getLlmTroubleshootingHint(result.errorCode, result.stage);
+      const hint = result.success ? undefined : getLlmTroubleshootingHint(result.errorCode, result.stage, 'test');
 
       setTestStates((previous) => ({
         ...previous,
@@ -1193,7 +1197,7 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
           text: result.success
             ? `已获取 ${result.models.length} 个模型${result.latencyMs ? ` · ${result.latencyMs} ms` : ''}`
             : buildLlmFailureText(result),
-          hint: result.success ? undefined : getLlmTroubleshootingHint(result.errorCode, result.stage),
+          hint: result.success ? undefined : getLlmTroubleshootingHint(result.errorCode, result.stage, 'discovery'),
           models: result.success ? result.models : (previous[channel.id]?.models || []),
         },
       }));
