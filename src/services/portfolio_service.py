@@ -331,10 +331,10 @@ class PortfolioService:
         if date_from is not None and date_to is not None and date_from > date_to:
             raise ValueError("date_from must be <= date_to")
 
-        symbol_norm: Optional[str] = None
+        symbol_filters: Optional[List[str]] = None
         if symbol is not None and symbol.strip():
-            symbol_norm = self._normalize_symbol(symbol)
-            if not symbol_norm:
+            symbol_filters = self._build_symbol_filter_values(symbol)
+            if not symbol_filters:
                 raise ValueError("symbol is invalid")
 
         side_norm: Optional[str] = None
@@ -347,7 +347,7 @@ class PortfolioService:
             account_id=account_id,
             date_from=date_from,
             date_to=date_to,
-            symbol=symbol_norm,
+            symbols=symbol_filters,
             side=side_norm,
             page=page,
             page_size=page_size,
@@ -413,10 +413,10 @@ class PortfolioService:
         if date_from is not None and date_to is not None and date_from > date_to:
             raise ValueError("date_from must be <= date_to")
 
-        symbol_norm: Optional[str] = None
+        symbol_filters: Optional[List[str]] = None
         if symbol is not None and symbol.strip():
-            symbol_norm = self._normalize_symbol(symbol)
-            if not symbol_norm:
+            symbol_filters = self._build_symbol_filter_values(symbol)
+            if not symbol_filters:
                 raise ValueError("symbol is invalid")
 
         action_norm: Optional[str] = None
@@ -429,7 +429,7 @@ class PortfolioService:
             account_id=account_id,
             date_from=date_from,
             date_to=date_to,
-            symbol=symbol_norm,
+            symbols=symbol_filters,
             action_type=action_norm,
             page=page,
             page_size=page_size,
@@ -1091,6 +1091,34 @@ class PortfolioService:
     @staticmethod
     def _normalize_symbol(symbol: str) -> str:
         return canonical_stock_code(normalize_stock_code(symbol))
+
+    @classmethod
+    def _build_symbol_filter_values(cls, symbol: str) -> List[str]:
+        normalized = cls._normalize_symbol(symbol)
+        if not normalized:
+            return []
+
+        seen: Set[str] = set()
+        values: List[str] = []
+
+        def _add(value: Optional[str]) -> None:
+            if not value:
+                return
+            candidate = canonical_stock_code(value)
+            if candidate and candidate not in seen:
+                seen.add(candidate)
+                values.append(candidate)
+
+        _add(symbol)
+        _add(normalized)
+        if normalized.isdigit():
+            if len(normalized) == 6:
+                _add(f"SH{normalized}")
+                _add(f"SZ{normalized}")
+                _add(f"BJ{normalized}")
+            elif len(normalized) == 5:
+                _add(f"HK{normalized}")
+        return values
 
     @staticmethod
     def _consume_fifo_lots(
