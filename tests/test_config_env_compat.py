@@ -401,6 +401,30 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
         self.assertEqual(stocks, ["600519", "HK01810"])
         self.assertEqual(emails, ["user@example.com"])
 
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_market_review_region_both_keeps_openai_compatible_llm_config_unchanged(
+        self,
+        _mock_parse_yaml,
+        _mock_setup_env,
+    ) -> None:
+        env = {
+            "STOCK_LIST": "600519",
+            "MARKET_REVIEW_REGION": "both",
+            "LITELLM_MODEL": "openai/gpt-4o-mini",
+            "OPENAI_API_KEY": "test-key",
+            "OPENAI_BASE_URL": "https://example.invalid/v1",
+            "LLM_TEMPERATURE": "0.42",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.market_review_region, "both")
+        self.assertEqual(config.litellm_model, "openai/gpt-4o-mini")
+        self.assertEqual(config.openai_base_url, "https://example.invalid/v1")
+        self.assertEqual(config.llm_temperature, 0.42)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -311,7 +311,8 @@ daily_stock_analysis/
 > - A 股大盘复盘报告采用盘后工作台式结构：固定包含盘面温度、指数明细、板块 Top 表、新闻催化、明日交易计划和风险提示；若部分数据源缺失，则保留可用区块并在对应位置降级展示。
 > - 在上述固定结构之后，系统会仅对 A 股复盘追加“热门板块 / 热门股票”摘要：热门板块按当日涨跌幅 Top N 排序，热门股票按当日涨跌幅优先、成交额次排序（剔除 ETF）；若板块或个股任一数据源缺失，则仅跳过对应追加区块，不影响原有复盘正文和其他区块输出。
 > - 该追加能力复用现有 `DataFetcherManager.get_sector_rankings()` / `get_hot_stocks()` 以及 TickFlow、efinance、AkShare 的既有 fallback 顺序；它不会改变个股分析、实时行情、LLM 调用或通知配置的优先级。
-> - 代码落点仅限 `src/core/market_review.py`、`src/services/market_review_hotspot_service.py`、`data_provider/base.py`、`data_provider/akshare_fetcher.py`、`data_provider/efinance_fetcher.py` 这类复盘拼装与 A 股行情读取路径；本次未新增环境变量、未修改 `.env.example`，也未调整 Web/Desktop 设置项。
+> - 代码落点仅限 `src/core/market_review.py`、`src/services/market_review_hotspot_service.py`、`data_provider/base.py`、`data_provider/akshare_fetcher.py`、`data_provider/efinance_fetcher.py` 这类复盘拼装与 A 股行情读取路径；本次未新增环境变量，仅同步了文档与 `.env.example` 中已有 `MARKET_REVIEW_REGION` 注释，也未调整 Web/Desktop 设置项。
+> - 如需回退，本次仅需关闭 `MARKET_REVIEW_ENABLED` 或回滚上述复盘/行情读取改动；现有 `LITELLM_CONFIG` / `LLM_CHANNELS` / legacy `GEMINI_*` `OPENAI_*` `ANTHROPIC_*` 配置无需迁移、清理或重写。
 > - 字段契约：
 >   - `fundamental_context.belong_boards` = 个股关联板块列表（当前仅 A 股写入；无数据时为 `[]`）；
 >   - `fundamental_context.boards.data` = `sector_rankings`（板块涨跌榜，结构 `{top, bottom}`）；
@@ -636,6 +637,7 @@ docker run -e SCHEDULE_ENABLED=true -e SCHEDULE_RUN_IMMEDIATELY=false ...
 - 交易日盘中或收盘前运行时，会以上一个已完成交易日作为复用目标；交易日收盘后运行时，当日数据已存在则可直接跳过，不存在则继续抓取
 - 覆盖方式：`TRADING_DAY_CHECK_ENABLED=false` 或 命令行 `--force-run`
 - 本次“大盘复盘热门板块 / 热门股票”追加摘要仅改动 A 股复盘正文拼装与行情 fallback，不涉及 LLM provider、Base URL、模型默认值，也不会迁移或改写现有运行时配置
+- 若要撤回该能力，只需禁用 `MARKET_REVIEW_ENABLED` 或回滚复盘相关代码路径；现有模型配置保持原状，不需要额外回迁步骤
 
 #### 使用 Crontab
 

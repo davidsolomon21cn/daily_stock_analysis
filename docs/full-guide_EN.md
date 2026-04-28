@@ -306,6 +306,7 @@ Default schedule: Every weekday at **18:00 (Beijing Time)** automatic execution.
 > - `MARKET_REVIEW_REGION=both` means the **full multi-market recap set**. With trading-day checks enabled, runtime narrows it to that day's open-market subset (`cn` / `hk` / `us` / `cn,hk` / `cn,us` / `hk,us` / `both`), where `both` means all three markets are open.
 > - The implementation scope is limited to `src/core/market_review.py`, `src/services/market_review_hotspot_service.py`, `data_provider/base.py`, `data_provider/akshare_fetcher.py`, and `data_provider/efinance_fetcher.py` for review assembly and A-share market data reads; this change adds no new env vars, only synchronizes the existing `MARKET_REVIEW_REGION` comments in docs/`.env.example`, and does not alter Web/Desktop settings surfaces.
 > - This appendix change does not modify LLM providers, base URLs, model defaults, or runtime config migration/backfill behavior; existing configs stay as-is.
+> - Rollback is limited to disabling `MARKET_REVIEW_ENABLED` or reverting the market-review/data-provider changes above; existing `LITELLM_CONFIG` / `LLM_CHANNELS` / legacy `GEMINI_*` `OPENAI_*` `ANTHROPIC_*` configs do not require migration or cleanup.
 > - Per-stock analysis, realtime quote priority, and sector rankings fallback remain unchanged.
 
 ---
