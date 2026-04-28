@@ -12,10 +12,22 @@ except ModuleNotFoundError:
 
     ensure_litellm_stub()
 
-from src.analyzer import GeminiAnalyzer
+from src.analyzer import GeminiAnalyzer, _BULLISH_TREND_HINTS, _contains_trend_hint
 
 
 class AnalyzerNewsPromptTestCase(unittest.TestCase):
+    def test_contains_trend_hint_treats_non_adjacent_negation_as_negated(self) -> None:
+        self.assertFalse(_contains_trend_hint("尚未形成上升趋势，继续观察。", _BULLISH_TREND_HINTS))
+        self.assertFalse(_contains_trend_hint("This is not a bullish trend yet.", _BULLISH_TREND_HINTS))
+
+    def test_contains_trend_hint_scans_later_non_negated_occurrences(self) -> None:
+        self.assertTrue(
+            _contains_trend_hint(
+                "不是多头排列，后续放量后再次出现多头排列信号。",
+                _BULLISH_TREND_HINTS,
+            )
+        )
+
     def test_analysis_prompt_resolves_shared_skill_prompt_state_by_default(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
             analyzer = GeminiAnalyzer()

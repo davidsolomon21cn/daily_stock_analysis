@@ -176,6 +176,9 @@ _BEARISH_TREND_HINTS: Tuple[str, ...] = (
     "downtrend",
 )
 _NEGATION_TOKENS: Tuple[str, ...] = ("未", "非", "不是", "并非", "尚未", "不属", "not ", "no ")
+_NEGATION_BREAK_CHARS: Tuple[str, ...] = (",", ".", ";", ":", "!", "?", "，", "。", "；", "：", "！", "？", "\n")
+_NEGATION_LOOKBACK_CHARS = 16
+_NEGATION_MAX_GAP_CHARS = 8
 
 
 def _normalize_prompt_reason_items(items: Any) -> List[str]:
@@ -193,15 +196,31 @@ def _normalize_prompt_reason_items(items: Any) -> List[str]:
 def _contains_trend_hint(text: str, hints: Tuple[str, ...]) -> bool:
     """Return True when text contains a non-negated strong trend hint."""
     lowered = text.strip().lower()
+
+    def _is_negated_match(index: int) -> bool:
+        prefix = lowered[max(0, index - _NEGATION_LOOKBACK_CHARS):index]
+        for token in _NEGATION_TOKENS:
+            token_index = prefix.rfind(token)
+            if token_index < 0:
+                continue
+            gap = prefix[token_index + len(token):]
+            if any(char in gap for char in _NEGATION_BREAK_CHARS):
+                continue
+            if len(gap.strip()) > _NEGATION_MAX_GAP_CHARS:
+                continue
+            return True
+        return False
+
     for hint in hints:
         keyword = hint.lower()
-        index = lowered.find(keyword)
-        if index < 0:
-            continue
-        prefix = lowered[max(0, index - 4):index]
-        if any(prefix.endswith(token) for token in _NEGATION_TOKENS):
-            continue
-        return True
+        start = 0
+        while True:
+            index = lowered.find(keyword, start)
+            if index < 0:
+                break
+            if not _is_negated_match(index):
+                return True
+            start = index + len(keyword)
     return False
 
 
