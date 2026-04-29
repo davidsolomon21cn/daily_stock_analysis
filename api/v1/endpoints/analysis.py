@@ -423,6 +423,7 @@ def get_task_list(
         TaskListResponse: 任务列表响应
     """
     task_queue = get_task_queue()
+    stats = task_queue.get_task_stats()
 
     # Parse status filter before fetching so that limit is applied after
     # filtering, not before. Otherwise ?status=pending&limit=20 could return
@@ -431,16 +432,18 @@ def get_task_list(
     if status:
         status_list = [s.strip().lower() for s in status.split(",")]
 
-    # When filtering by status, fetch up to the API maximum first so the
-    # requested limit is applied to the already-filtered set.
-    all_tasks = task_queue.list_all_tasks(limit=100 if status_list else limit)
+    # When filtering by status, first load all in-memory tasks then slice to
+    # request limit after filtering. Using `stats["total"]` avoids false
+    # truncation when matched tasks are located beyond the default / requested
+    # window.
+    if status_list:
+        all_tasks = task_queue.list_all_tasks(limit=stats["total"])
+    else:
+        all_tasks = task_queue.list_all_tasks(limit=limit)
 
     if status_list:
         all_tasks = [t for t in all_tasks if t.status.value in status_list]
         all_tasks = all_tasks[:limit]
-    
-    # 统计信息
-    stats = task_queue.get_task_stats()
     
     # 转换为 Schema
     task_infos = [

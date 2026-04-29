@@ -3,7 +3,7 @@
 
 import asyncio
 from concurrent.futures import Future
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import tempfile
 import unittest
@@ -22,6 +22,7 @@ try:
         _handle_sync_analysis,
         _build_analysis_report,
         _load_sync_fundamental_sources,
+        get_task_list,
         get_analysis_status,
     )
 except Exception:  # pragma: no cover - optional dependency environments
@@ -30,15 +31,98 @@ except Exception:  # pragma: no cover - optional dependency environments
     _handle_sync_analysis = None
     _build_analysis_report = None
     _load_sync_fundamental_sources = None
+    get_task_list = None
     get_analysis_status = None
 
 from src.enums import ReportType
 from src.services.analysis_service import AnalysisService
 from src.services.image_stock_extractor import _call_litellm_vision
-from src.services.task_queue import AnalysisTaskQueue
+from src.services.task_queue import AnalysisTaskQueue, TaskStatus
 
 
 class AnalysisApiContractTestCase(unittest.TestCase):
+    def test_get_task_list_applies_status_filter_after_loading_full_queue(self) -> None:
+        if get_task_list is None:
+            self.skipTest("analysis endpoint helpers unavailable in this environment")
+
+        now = datetime(2026, 4, 29, 12, 0, 0)
+        tasks = [
+            SimpleNamespace(
+                task_id=f"task-{i}",
+                stock_code=f"6005{i:02d}",
+                stock_name="测试股票",
+                status=TaskStatus.PENDING if i >= 100 else TaskStatus.COMPLETED,
+                progress=0,
+                message=None,
+                report_type="detailed",
+                created_at=now - timedelta(seconds=i),
+                started_at=None,
+                completed_at=None,
+                error=None,
+                original_query=None,
+                selection_source=None,
+            )
+            for i in range(120)
+        ]
+
+        mock_queue = MagicMock()
+        mock_queue.get_task_stats.return_value = {
+            "total": 120,
+            "pending": 20,
+            "processing": 0,
+            "completed": 100,
+            "failed": 0,
+        }
+        mock_queue.list_all_tasks.return_value = tasks
+
+        with patch("api.v1.endpoints.analysis.get_task_queue", return_value=mock_queue):
+            response = get_task_list(status="pending", limit=10)
+
+        self.assertEqual(len(response.tasks), 10)
+        self.assertTrue(all(task.status == "pending" for task in response.tasks))
+        mock_queue.list_all_tasks.assert_called_once_with(limit=120)
+
+    def test_get_task_list_without_status_keeps_query_limit(self) -> None:
+        if get_task_list is None:
+            self.skipTest("analysis endpoint helpers unavailable in this environment")
+
+        now = datetime(2026, 4, 29, 12, 0, 0)
+        tasks = [
+            SimpleNamespace(
+                task_id=f"task-{i}",
+                stock_code=f"6005{i:02d}",
+                stock_name="测试股票",
+                status=TaskStatus.COMPLETED,
+                progress=0,
+                message=None,
+                report_type="detailed",
+                created_at=now,
+                started_at=None,
+                completed_at=None,
+                error=None,
+                original_query=None,
+                selection_source=None,
+            )
+            for i in range(20)
+        ]
+
+        mock_queue = MagicMock()
+        mock_queue.get_task_stats.return_value = {
+            "total": 20,
+            "pending": 0,
+            "processing": 0,
+            "completed": 20,
+            "failed": 0,
+        }
+        mock_queue.list_all_tasks.side_effect = lambda limit: tasks[:limit]
+
+        with patch("api.v1.endpoints.analysis.get_task_queue", return_value=mock_queue):
+            response = get_task_list(status=None, limit=10)
+
+        self.assertEqual(len(response.tasks), 10)
+        self.assertEqual(response.total, 20)
+        mock_queue.list_all_tasks.assert_called_once_with(limit=10)
+
     def test_get_analysis_status_completed_db_snapshot_preserves_zero_change_pct(self) -> None:
         if get_analysis_status is None:
             self.skipTest("analysis endpoint helpers unavailable in this environment")
