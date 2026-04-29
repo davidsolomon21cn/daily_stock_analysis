@@ -268,6 +268,35 @@ class MarketReviewRuntimePathsTestCase(unittest.TestCase):
 
         self.assertEqual(result, "## 2026-04-10 大盘复盘\n\n正文")
 
+    def test_run_market_review_hk_mode_keeps_single_market_path_without_hotspots(self) -> None:
+        notifier = self._make_notifier()
+        hk_analyzer = MagicMock()
+        hk_analyzer.run_daily_review.return_value = "HK body"
+        hotspot_service = MagicMock()
+
+        with patch.object(
+            market_review_module,
+            "get_config",
+            return_value=SimpleNamespace(report_language="zh", market_review_region="hk"),
+        ), patch.object(
+            market_review_module,
+            "get_open_markets_today",
+            side_effect=AssertionError("direct hk mode should not be narrowed again"),
+        ), patch.object(
+            market_review_module,
+            "MarketAnalyzer",
+            return_value=hk_analyzer,
+        ) as market_analyzer_cls, patch.object(
+            market_review_module,
+            "MarketReviewHotspotService",
+            return_value=hotspot_service,
+        ):
+            result = run_market_review(notifier, send_notification=False)
+
+        self.assertEqual(result, "HK body")
+        self.assertEqual(market_analyzer_cls.call_args.kwargs["region"], "hk")
+        hotspot_service.build_markdown.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

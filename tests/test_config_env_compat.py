@@ -449,6 +449,61 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
         self.assertEqual(config.openai_base_url, "https://example.invalid/v1")
         self.assertEqual(config.llm_temperature, 0.42)
 
+    @patch("src.config.setup_env")
+    @patch.object(
+        Config,
+        "_parse_litellm_yaml",
+        return_value=[{"model_name": "primary", "litellm_params": {"model": "openai/gpt-4o-mini"}}],
+    )
+    def test_market_review_region_both_keeps_litellm_config_path_and_models_source(
+        self,
+        _mock_parse_yaml,
+        _mock_setup_env,
+    ) -> None:
+        env = {
+            "STOCK_LIST": "600519",
+            "MARKET_REVIEW_REGION": "both",
+            "LITELLM_CONFIG": "/tmp/litellm.yaml",
+            "OPENAI_API_KEY": "test-key",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.market_review_region, "both")
+        self.assertEqual(config.litellm_config_path, "/tmp/litellm.yaml")
+        self.assertEqual(config.llm_models_source, "litellm_config")
+        self.assertEqual(
+            config.llm_model_list[0]["litellm_params"]["model"],
+            "openai/gpt-4o-mini",
+        )
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_market_review_region_hk_keeps_llm_channels_unchanged(
+        self,
+        _mock_parse_yaml,
+        _mock_setup_env,
+    ) -> None:
+        env = {
+            "STOCK_LIST": "00700",
+            "MARKET_REVIEW_REGION": "hk",
+            "LLM_CHANNELS": "primary",
+            "LLM_PRIMARY_PROTOCOL": "openai",
+            "LLM_PRIMARY_BASE_URL": "https://example.invalid/v1",
+            "LLM_PRIMARY_API_KEY": "sk-test-value",
+            "LLM_PRIMARY_MODELS": "gpt-4o-mini",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.market_review_region, "hk")
+        self.assertEqual(config.llm_models_source, "llm_channels")
+        self.assertEqual(config.llm_channels[0]["protocol"], "openai")
+        self.assertEqual(config.llm_channels[0]["base_url"], "https://example.invalid/v1")
+        self.assertEqual(config.llm_channels[0]["models"], ["openai/gpt-4o-mini"])
+
 
 if __name__ == "__main__":
     unittest.main()
