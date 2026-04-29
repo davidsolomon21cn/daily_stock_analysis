@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
 - [新功能] A 股大盘复盘推送新增“热门板块 / 热门股票”附加摘要，按板块涨跌幅 Top N 与个股涨跌幅优先、成交额次排序追加展示；任一数据源缺失时仅跳过对应区块，不阻断原复盘输出；同时恢复 `MARKET_REVIEW_REGION=both` 的多市场全集语义，交易日过滤后可收敛为含港股的运行子集；本次改动未涉及 LLM/provider/Base URL/模型默认值或旧配置迁移。
 - [测试] 补充大盘复盘区域语义回归用例：未传 `override_region` 时继续遵循配置全集语义，不因当日开市集合收窄 `MARKET_REVIEW_REGION=both`；并覆盖交易日过滤后的 `cn,hk,us` 子集解析。
-- [文档] 补充大盘复盘热门摘要的兼容性说明：结构化检测中的“外部模型/API 或运行时配置迁移风险”来自 `.env.example` / `src/config.py` / `src/core/config_registry.py` 同时变更的命中，不涉及 LLM provider、Base URL、模型默认值或旧配置迁移。
+- [文档] 补充大盘复盘热门摘要的兼容性说明：结构化检测中的“外部模型/API 或运行时配置迁移风险”来自 `.env.example` / `src/config.py` / `src/core/config_registry.py` 同时变更的命中，不涉及 LLM provider、Base URL、模型默认值或旧配置迁移；现有旧配置保持原语义，回退时删除新增大盘复盘热点相关配置或将 `MARKET_REVIEW_REGION` 设回原值即可。
+- [修复] 问股 Agent 在未配置可用 LLM 时保留后端真实错误原因并维持 `done.success=false` 失败语义，避免前端把配置缺失误当成成功回答。
+- [文档] 补充 LLM 配置指南与 FAQ，明确问股 Agent 对 `LITELLM_CONFIG` / `LLM_CHANNELS` / legacy `GEMINI_*` `OPENAI_*` `ANTHROPIC_*` 的兼容优先级、回退路径与“不静默迁移旧配置”的结论。
 
 ## [3.14.1] - 2026-04-26
 
