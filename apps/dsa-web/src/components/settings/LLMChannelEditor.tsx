@@ -989,6 +989,22 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
     const runtimeConfigForSave = managesRuntimeConfig
       ? sanitizeRuntimeConfigForSave(runtimeConfig, availableModels)
       : runtimeConfig;
+    const removedRuntimeSelections: string[] = [];
+    if (managesRuntimeConfig) {
+      if (runtimeConfig.primaryModel !== runtimeConfigForSave.primaryModel) {
+        removedRuntimeSelections.push('主模型');
+      }
+      if (runtimeConfig.agentPrimaryModel !== runtimeConfigForSave.agentPrimaryModel) {
+        removedRuntimeSelections.push('Agent 主模型');
+      }
+      if (runtimeConfig.visionModel !== runtimeConfigForSave.visionModel) {
+        removedRuntimeSelections.push('Vision 模型');
+      }
+      if (runtimeConfig.fallbackModels.join(',') !== runtimeConfigForSave.fallbackModels.join(',')) {
+        removedRuntimeSelections.push('备选模型');
+      }
+    }
+
     if (!runtimeConfigsAreEqual(runtimeConfigForSave, runtimeConfig)) {
       setRuntimeConfig(runtimeConfigForSave);
     }
@@ -1038,7 +1054,11 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
         reloadNow: true,
         items: updateItems,
       });
-      setSaveMessage({ type: 'success', text: managesRuntimeConfig ? 'AI 配置已保存' : '渠道配置已保存' });
+      const baseMessage = managesRuntimeConfig ? 'AI 配置已保存' : '渠道配置已保存';
+      const extraMessage = removedRuntimeSelections.length > 0
+        ? `（已清理不可选运行时模型：${removedRuntimeSelections.join('、')}。恢复对应渠道模型后可重新选择。）`
+        : '';
+      setSaveMessage({ type: 'success', text: `${baseMessage}${extraMessage}` });
       await onSaved(updateItems);
     } catch (error: unknown) {
       setSaveMessage({ type: 'error', error: getParsedApiError(error) });

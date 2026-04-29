@@ -71,6 +71,12 @@ LITELLM_MODEL=ollama/qwen3:8b
 
 > **New editor behavior**: For DeepSeek, DashScope, and other OpenAI-compatible providers that expose `/v1/models`, the settings page can now fetch models directly from `{base_url}/models` and let you select multiple entries visually. The underlying storage format is still the existing comma-separated `LLM_{CHANNEL}_MODELS=model1,model2` value. If a provider does not support `/models`, authentication fails, or the endpoint is temporarily unavailable, you can still type the model list manually and save normally.
 
+### Runtime field cleanup before saving (Web settings)
+
+- Before saving, the page validates `LITELLM_MODEL`, `AGENT_LITELLM_MODEL`, `VISION_MODEL`, and `LITELLM_FALLBACK_MODELS` against currently discovered models from enabled channels; values not found are cleared automatically so the save operation can still succeed.
+- Direct provider models such as `cohere/xxx`, `google/xxx`, or `xai/xxx` are preserved even when they are not present in the channel model list, because they are treated as valid external provider runtime entries.
+- If you see a runtime field cleared, add the corresponding model back to the channel model list (or switch to another available model) and save again; the success message will indicate which runtime fields were auto-cleaned.
+
 If you prefer modifying files, configuring this in the `.env` file is also very smooth. It allows you to manage multiple platforms simultaneously. The rules are:
 
 1. **Declare your channels first**: `LLM_CHANNELS=channel_name_1,channel_name_2`

@@ -71,6 +71,12 @@ LITELLM_MODEL=ollama/qwen3:8b
 
 > **新版编辑体验补充**：对于 DeepSeek、阿里百炼（DashScope）以及其他兼容 OpenAI `/v1/models` 的渠道，设置页现在支持直接点击“获取模型”，从 `{base_url}/models` 拉取可用模型并多选；底层仍会保存为原来的 `LLM_{CHANNEL}_MODELS=model1,model2` 逗号格式。若渠道不支持该接口、鉴权失败或暂时不可达，仍可继续手动填写模型列表，不影响保存。
 
+### Web 配置页运行时清理规则（保存前）
+
+- 保存 AI 配置前，页面会检查 `LITELLM_MODEL`、`AGENT_LITELLM_MODEL`、`VISION_MODEL` 与 `LITELLM_FALLBACK_MODELS` 是否仍在当前启用渠道的可选模型列表中；不在列表里的值会被清空并继续保存，避免保存时失败。
+- `cohere/xxx`、`google/xxx`、`xai/xxx` 等通过非托管协议或单独 provider Key 进入的直连模型会被保留（即使不在当前渠道列表中也会通过）。
+- 如果你看到某个字段被清空，先到对应渠道把该模型补回（或改成新模型）再保存即可重新选择；系统会在成功保存的提示里告诉你本次已清理了哪些运行时字段。
+
 如果不方便用网页版，在 `.env` 文件中配置也非常丝滑，它能让你同时管理多个第三方平台。规则如下：
 
 1. **先声明你有几个渠道**：`LLM_CHANNELS=渠道名称1,渠道名称2`
