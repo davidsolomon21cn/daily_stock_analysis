@@ -179,13 +179,7 @@ def run_market_review(
                 if mkt_report:
                     parts.append(f"{review_text[title_key]}\n\n{mkt_report}")
             if parts:
-                review_report = f"\n\n---\n\n{review_text['separator']}\n\n".join(
-                    _append_cn_hotspot_part(
-                        parts,
-                        cn_title=review_text['cn_title'],
-                        language=review_language,
-                    )
-                )
+                review_report = f"\n\n---\n\n{review_text['separator']}\n\n".join(parts)
             else:
                 review_report = None
         else:
@@ -201,6 +195,15 @@ def run_market_review(
                     review_report,
                     review_language,
                 )
+
+        if review_report and len(run_markets) > 1:
+            review_report = f"\n\n---\n\n{review_text['separator']}\n\n".join(
+                _append_cn_hotspot_part(
+                    review_report.split(f"\n\n---\n\n{review_text['separator']}\n\n"),
+                    cn_title=review_text['cn_title'],
+                    language=review_language,
+                )
+            )
 
         if review_report:
             # 保存报告到文件

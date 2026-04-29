@@ -84,6 +84,40 @@ class MarketReviewRuntimePathsTestCase(unittest.TestCase):
         self.assertIn("# 港股大盘复盘\n\nHK body", result)
         self.assertIn("# 美股大盘复盘\n\nUS body", result)
 
+    def test_run_market_review_without_override_does_not_consult_open_market_filter(self) -> None:
+        notifier = self._make_notifier()
+        cn_analyzer = MagicMock()
+        cn_analyzer.run_daily_review.return_value = "CN body"
+        hk_analyzer = MagicMock()
+        hk_analyzer.run_daily_review.return_value = "HK body"
+        us_analyzer = MagicMock()
+        us_analyzer.run_daily_review.return_value = "US body"
+        hotspot_service = MagicMock()
+        hotspot_service.build_markdown.return_value = ""
+
+        with patch.object(
+            market_review_module,
+            "get_config",
+            return_value=SimpleNamespace(report_language="zh", market_review_region="both"),
+        ), patch.object(
+            market_review_module,
+            "get_open_markets_today",
+            side_effect=AssertionError("run_market_review should honor configured region without filtering"),
+        ), patch.object(
+            market_review_module,
+            "MarketAnalyzer",
+            side_effect=[cn_analyzer, hk_analyzer, us_analyzer],
+        ), patch.object(
+            market_review_module,
+            "MarketReviewHotspotService",
+            return_value=hotspot_service,
+        ):
+            result = run_market_review(notifier, send_notification=False)
+
+        self.assertIn("# A股大盘复盘\n\nCN body", result)
+        self.assertIn("# 港股大盘复盘\n\nHK body", result)
+        self.assertIn("# 美股大盘复盘\n\nUS body", result)
+
     def test_run_market_review_invalid_comma_region_falls_back_to_cn(self) -> None:
         notifier = self._make_notifier()
         market_analyzer = MagicMock()
