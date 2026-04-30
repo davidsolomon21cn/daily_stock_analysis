@@ -1001,11 +1001,11 @@ class SystemConfigServiceTestCase(unittest.TestCase):
             "LLM_DEEPSEEK_PROTOCOL=deepseek",
             "LLM_DEEPSEEK_BASE_URL=https://api.deepseek.com",
             "LLM_DEEPSEEK_API_KEY=sk-test-value",
-            "LLM_DEEPSEEK_MODELS=deepseek-v4-flash,deepseek-v4-pro",
+            "LLM_DEEPSEEK_MODELS=deepseek-chat,deepseek-v4-flash,deepseek-v4-pro",
             "LITELLM_MODEL=deepseek/deepseek-chat",
-            "AGENT_LITELLM_MODEL=deepseek/deepseek-reasoner",
+            "AGENT_LITELLM_MODEL=deepseek/deepseek-v4-pro",
             "LITELLM_FALLBACK_MODELS=deepseek/deepseek-v4-pro,deepseek/deepseek-chat,cohere/command-r-plus",
-            "VISION_MODEL=deepseek/deepseek-reasoner",
+            "VISION_MODEL=deepseek/deepseek-v4-flash",
         )
 
         response = self.service.update(
@@ -1028,6 +1028,55 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         )
         self.assertIn("主模型 / Agent 主模型 / Vision 模型 / 备选模型中的失效项", warning)
         self.assertIn("桌面端导出备份", warning)
+
+    def test_import_desktop_env_restores_runtime_models_after_cleanup(self) -> None:
+        self._rewrite_env(
+            "STOCK_LIST=600519,000001",
+            "LLM_CHANNELS=deepseek",
+            "LLM_DEEPSEEK_PROTOCOL=deepseek",
+            "LLM_DEEPSEEK_BASE_URL=https://api.deepseek.com",
+            "LLM_DEEPSEEK_API_KEY=sk-test-value",
+            "LLM_DEEPSEEK_MODELS=deepseek-chat,deepseek-v4-flash,deepseek-v4-pro",
+            "LITELLM_MODEL=deepseek/deepseek-chat",
+            "AGENT_LITELLM_MODEL=deepseek/deepseek-v4-pro",
+            "LITELLM_FALLBACK_MODELS=deepseek/deepseek-v4-pro,deepseek/deepseek-chat,cohere/command-r-plus",
+            "VISION_MODEL=deepseek/deepseek-v4-flash",
+        )
+
+        backup_content = self.service.export_desktop_env()["content"]
+        pre_clear_map = dict(self.manager.read_config_map())
+
+        clear_response = self.service.update(
+            config_version=self.manager.get_config_version(),
+            items=[
+                {"key": "LLM_DEEPSEEK_MODELS", "value": "deepseek-v4-flash"},
+                {"key": "LITELLM_MODEL", "value": ""},
+                {"key": "AGENT_LITELLM_MODEL", "value": ""},
+                {"key": "LITELLM_FALLBACK_MODELS", "value": "deepseek/deepseek-v4-flash"},
+                {"key": "VISION_MODEL", "value": ""},
+            ],
+            reload_now=False,
+        )
+        self.assertTrue(clear_response["success"])
+
+        cleared_map = self.manager.read_config_map()
+        self.assertEqual(cleared_map["LITELLM_MODEL"], "")
+        self.assertEqual(cleared_map["AGENT_LITELLM_MODEL"], "")
+        self.assertEqual(cleared_map["VISION_MODEL"], "")
+        self.assertEqual(cleared_map["LITELLM_FALLBACK_MODELS"], "deepseek/deepseek-v4-flash")
+
+        restore_payload = self.service.import_desktop_env(
+            config_version=self.manager.get_config_version(),
+            content=backup_content,
+            reload_now=False,
+        )
+        self.assertTrue(restore_payload["success"])
+
+        restored_map = self.manager.read_config_map()
+        self.assertEqual(restored_map["LITELLM_MODEL"], pre_clear_map["LITELLM_MODEL"])
+        self.assertEqual(restored_map["AGENT_LITELLM_MODEL"], pre_clear_map["AGENT_LITELLM_MODEL"])
+        self.assertEqual(restored_map["VISION_MODEL"], pre_clear_map["VISION_MODEL"])
+        self.assertEqual(restored_map["LITELLM_FALLBACK_MODELS"], pre_clear_map["LITELLM_FALLBACK_MODELS"])
 
 
     def test_validate_rejects_comma_only_api_key(self) -> None:
