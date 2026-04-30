@@ -86,22 +86,29 @@ function formatSignedPct(value: number | undefined | null): string {
   return `${sign}${value.toFixed(2)}%`;
 }
 
-function formatPriceSourceLabel(source: string | undefined | null): string {
-  if (source === 'avg_cost_fallback') return 'Fallback价';
-  if (source === 'recent_close') return '收盘价';
-  return '估值价';
+function hasPositionPrice(row: PortfolioPositionItem): boolean {
+  return row.priceAvailable !== false && row.priceSource !== 'missing';
 }
 
-function getPositionPriceHint(position: PortfolioPositionItem): string | null {
-  if (position.isFallback) {
-    return '暂无可用收盘价，已回退为持仓成本价。';
+function formatPositionPrice(row: PortfolioPositionItem): string {
+  if (!hasPositionPrice(row)) return '--';
+  return row.lastPrice.toFixed(4);
+}
+
+function formatPositionMoney(value: number, row: PortfolioPositionItem): string {
+  if (!hasPositionPrice(row)) return '--';
+  return formatMoney(value, row.valuationCurrency);
+}
+
+function getPositionPriceLabel(row: PortfolioPositionItem): string {
+  if (!hasPositionPrice(row)) return '缺价';
+  if (row.priceSource === 'realtime_quote') {
+    return row.priceProvider ? `实时价 · ${row.priceProvider}` : '实时价';
   }
-  if (position.isStale) {
-    return position.priceDate
-      ? `价格日期 ${position.priceDate}，并非当日最新。`
-      : '价格来源较旧，请留意时效性。';
+  if (row.priceSource === 'history_close') {
+    return row.priceStale && row.priceDate ? `收盘价 · ${row.priceDate}` : '收盘价';
   }
-  return null;
+  return row.priceSource || '未知来源';
 }
 
 function formatSideLabel(value: PortfolioSide): string {
@@ -1005,18 +1012,22 @@ const PortfolioPage: React.FC = () => {
                       <td className="py-2 pr-2 text-right">{row.quantity.toFixed(2)}</td>
                       <td className="py-2 pr-2 text-right">{row.avgCost.toFixed(4)}</td>
                       <td className="py-2 pr-2 text-right">
-                        <div>{row.lastPrice.toFixed(4)}</div>
-                        <div className="mt-1 text-[11px] text-secondary">
-                          {formatPriceSourceLabel(row.priceSource)}
-                          {row.priceDate ? ` · ${row.priceDate}` : ''}
+                        <div>{formatPositionPrice(row)}</div>
+                        <div className={`text-[11px] ${hasPositionPrice(row) ? 'text-secondary' : 'text-warning'}`}>
+                          {getPositionPriceLabel(row)}
                         </div>
-                        {getPositionPriceHint(row) ? (
-                          <div className="mt-1 text-[11px] text-warning">{getPositionPriceHint(row)}</div>
-                        ) : null}
                       </td>
-                      <td className="py-2 pr-2 text-right">{formatMoney(row.marketValueBase, row.valuationCurrency)}</td>
-                      <td className={`py-2 text-right ${row.unrealizedPnlBase >= 0 ? 'text-success' : 'text-danger'}`}>
-                        {formatMoney(row.unrealizedPnlBase, row.valuationCurrency)}
+                      <td className="py-2 pr-2 text-right">{formatPositionMoney(row.marketValueBase, row)}</td>
+                      <td
+                        className={`py-2 text-right ${
+                          hasPositionPrice(row)
+                            ? row.unrealizedPnlBase >= 0
+                              ? 'text-success'
+                              : 'text-danger'
+                            : 'text-secondary'
+                        }`}
+                      >
+                        {formatPositionMoney(row.unrealizedPnlBase, row)}
                       </td>
                       <td className={`py-2 text-right ${Number(row.unrealizedPnlPct || 0) >= 0 ? 'text-success' : 'text-danger'}`}>
                         {formatSignedPct(row.unrealizedPnlPct)}

@@ -110,6 +110,97 @@ class PortfolioServiceTestCase(unittest.TestCase):
             self._save_close(self.service._normalize_symbol(symbol), close_date or date(2026, 1, 3), close)
         return aid
 
+    def test_current_snapshot_uses_realtime_price_when_close_missing(self) -> None:
+        today = date.today()
+        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        aid = account["id"]
+        self.service.record_trade(
+            account_id=aid,
+            symbol="600519",
+            trade_date=today,
+            side="buy",
+            quantity=10,
+            price=100,
+            market="cn",
+            currency="CNY",
+        )
+
+        with patch.object(PortfolioService, "_fetch_realtime_position_price", return_value=(125.0, "unit-test")):
+            snapshot = self.service.get_portfolio_snapshot(account_id=aid, as_of=today, cost_method="fifo")
+
+        pos = snapshot["accounts"][0]["positions"][0]
+        self.assertAlmostEqual(pos["last_price"], 125.0, places=6)
+        self.assertAlmostEqual(pos["market_value_base"], 1250.0, places=6)
+        self.assertAlmostEqual(pos["unrealized_pnl_base"], 250.0, places=6)
+        self.assertEqual(pos["price_source"], "realtime_quote")
+        self.assertEqual(pos["price_provider"], "unit-test")
+        self.assertTrue(pos["price_available"])
+
+    def test_current_snapshot_uses_close_before_realtime_fallback(self) -> None:
+        today = date.today()
+        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        aid = account["id"]
+        self.service.record_trade(
+            account_id=aid,
+            symbol="600519",
+            trade_date=today,
+            side="buy",
+            quantity=10,
+            price=100,
+            market="cn",
+            currency="CNY",
+        )
+        self._save_close("600519", today, 118.0)
+
+        with patch.object(
+            PortfolioService,
+            "_fetch_realtime_position_price",
+            side_effect=AssertionError("close price should be used before realtime fallback"),
+        ):
+            snapshot = self.service.get_portfolio_snapshot(account_id=aid, as_of=today, cost_method="fifo")
+
+        pos = snapshot["accounts"][0]["positions"][0]
+        self.assertAlmostEqual(pos["last_price"], 118.0, places=6)
+        self.assertAlmostEqual(pos["market_value_base"], 1180.0, places=6)
+        self.assertAlmostEqual(pos["unrealized_pnl_base"], 180.0, places=6)
+        self.assertEqual(pos["price_source"], "history_close")
+        self.assertTrue(pos["price_available"])
+
+    def test_historical_snapshot_marks_missing_price_without_cost_fallback(self) -> None:
+        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        aid = account["id"]
+        self.service.record_trade(
+            account_id=aid,
+            symbol="600519",
+            trade_date=date(2026, 1, 1),
+            side="buy",
+            quantity=10,
+            price=100,
+            market="cn",
+            currency="CNY",
+        )
+
+        with patch.object(
+            PortfolioService,
+            "_fetch_realtime_position_price",
+            side_effect=AssertionError("historical snapshot should not fetch realtime quote"),
+        ):
+            snapshot = self.service.get_portfolio_snapshot(
+                account_id=aid,
+                as_of=date(2026, 1, 2),
+                cost_method="fifo",
+            )
+
+        pos = snapshot["accounts"][0]["positions"][0]
+        self.assertEqual(pos["last_price"], 0.0)
+        self.assertEqual(pos["market_value_base"], 0.0)
+        self.assertEqual(pos["unrealized_pnl_base"], 0.0)
+        self.assertEqual(pos["price_source"], "missing")
+        self.assertFalse(pos["price_available"])
+        self.assertTrue(pos["price_stale"])
+        self.assertEqual(snapshot["accounts"][0]["total_market_value"], 0.0)
+        self.assertEqual(snapshot["accounts"][0]["unrealized_pnl"], 0.0)
+
     def test_snapshot_fifo_vs_avg_on_partial_sell(self) -> None:
         account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
         aid = account["id"]
@@ -187,16 +278,16 @@ class PortfolioServiceTestCase(unittest.TestCase):
                 position = self.service.get_portfolio_snapshot(account_id=aid, as_of=date(2026, 1, 3), cost_method="fifo")["accounts"][0]["positions"][0]
 
                 self.assertEqual(position["symbol"], expected_symbol)
-                self.assertEqual(position["price_source"], "recent_close")
+                self.assertEqual(position["price_source"], "history_close")
                 self.assertEqual(position["price_date"], "2026-01-03")
-                self.assertFalse(position["is_stale"])
-                self.assertFalse(position["is_fallback"])
+                self.assertFalse(position["price_stale"])
+                self.assertTrue(position["price_available"])
                 self.assertAlmostEqual(position["last_price"], close, places=6)
                 self.assertAlmostEqual(position["market_value_base"], close * 10, places=6)
                 self.assertAlmostEqual(position["unrealized_pnl_base"], close * 10 - 1000, places=6)
                 self.assertAlmostEqual(position["unrealized_pnl_pct"], (close * 10 - 1000) / 1000 * 100, places=6)
 
-    def test_snapshot_marks_stale_close_and_avg_cost_fallback_price(self) -> None:
+    def test_snapshot_marks_stale_close_and_missing_price(self) -> None:
         aid = self._create_account_with_position(
             market="cn",
             currency="CNY",
@@ -220,22 +311,22 @@ class PortfolioServiceTestCase(unittest.TestCase):
         positions = {item["symbol"]: item for item in snapshot["accounts"][0]["positions"]}
 
         stale_close = positions["600519"]
-        self.assertEqual(stale_close["price_source"], "recent_close")
+        self.assertEqual(stale_close["price_source"], "history_close")
         self.assertEqual(stale_close["price_date"], "2026-01-02")
-        self.assertTrue(stale_close["is_stale"])
-        self.assertFalse(stale_close["is_fallback"])
+        self.assertTrue(stale_close["price_stale"])
+        self.assertTrue(stale_close["price_available"])
         self.assertAlmostEqual(stale_close["last_price"], 110.0, places=6)
         self.assertAlmostEqual(stale_close["unrealized_pnl_pct"], 10.0, places=6)
 
-        fallback = positions["000001"]
-        self.assertEqual(fallback["price_source"], "avg_cost_fallback")
-        self.assertIsNone(fallback["price_date"])
-        self.assertTrue(fallback["is_stale"])
-        self.assertTrue(fallback["is_fallback"])
-        self.assertAlmostEqual(fallback["last_price"], 20.0, places=6)
-        self.assertAlmostEqual(fallback["market_value_base"], 100.0, places=6)
-        self.assertAlmostEqual(fallback["unrealized_pnl_base"], 0.0, places=6)
-        self.assertAlmostEqual(fallback["unrealized_pnl_pct"], 0.0, places=6)
+        missing = positions["000001"]
+        self.assertEqual(missing["price_source"], "missing")
+        self.assertIsNone(missing["price_date"])
+        self.assertTrue(missing["price_stale"])
+        self.assertFalse(missing["price_available"])
+        self.assertAlmostEqual(missing["last_price"], 0.0, places=6)
+        self.assertAlmostEqual(missing["market_value_base"], 0.0, places=6)
+        self.assertAlmostEqual(missing["unrealized_pnl_base"], 0.0, places=6)
+        self.assertIsNone(missing["unrealized_pnl_pct"])
 
     def test_build_positions_handles_zero_cost_without_division(self) -> None:
         account = SimpleNamespace(base_currency="CNY")
@@ -249,9 +340,72 @@ class PortfolioServiceTestCase(unittest.TestCase):
         )
 
         self.assertEqual(len(positions), 1)
-        self.assertEqual(positions[0]["price_source"], "avg_cost_fallback")
+        self.assertEqual(positions[0]["price_source"], "missing")
         self.assertIsNone(positions[0]["unrealized_pnl_pct"])
         self.assertAlmostEqual(positions[0]["last_price"], 0.0, places=6)
+
+    def test_symbol_filter_matches_legacy_prefix_suffix_variants(self) -> None:
+        account = self.service.create_account(name="Legacy", broker="Demo", market="cn", base_currency="CNY")
+        aid = account["id"]
+        for symbol in ["600519", "SH600519", "600519.SH", "600519.SS"]:
+            self.service.repo.add_trade(
+                account_id=aid,
+                trade_uid=None,
+                symbol=symbol,
+                market="cn",
+                currency="CNY",
+                trade_date=date(2026, 1, 2),
+                side="buy",
+                quantity=1,
+                price=10,
+                fee=0,
+                tax=0,
+            )
+
+        rows = self.service.list_trade_events(account_id=aid, symbol="600519", page=1, page_size=20)["items"]
+        self.assertEqual({row["symbol"] for row in rows}, {"600519", "SH600519", "600519.SH", "600519.SS"})
+
+    def test_symbol_filter_matches_legacy_hk_variants(self) -> None:
+        account = self.service.create_account(name="Legacy HK", broker="Demo", market="hk", base_currency="HKD")
+        aid = account["id"]
+        for symbol in ["HK00700", "HK700", "00700.HK", "700.HK"]:
+            self.service.repo.add_trade(
+                account_id=aid,
+                trade_uid=None,
+                symbol=symbol,
+                market="hk",
+                currency="HKD",
+                trade_date=date(2026, 1, 2),
+                side="buy",
+                quantity=1,
+                price=10,
+                fee=0,
+                tax=0,
+            )
+
+        rows = self.service.list_trade_events(account_id=aid, symbol="HK00700", page=1, page_size=20)["items"]
+        self.assertEqual({row["symbol"] for row in rows}, {"HK00700", "HK700", "00700.HK", "700.HK"})
+
+    def test_explicit_exchange_symbol_filter_does_not_match_other_exchanges(self) -> None:
+        account = self.service.create_account(name="Mixed", broker="Demo", market="cn", base_currency="CNY")
+        aid = account["id"]
+        for symbol in ["SH000001", "SZ000001", "000001.SH", "000001.SZ"]:
+            self.service.repo.add_trade(
+                account_id=aid,
+                trade_uid=None,
+                symbol=symbol,
+                market="cn",
+                currency="CNY",
+                trade_date=date(2026, 1, 2),
+                side="buy",
+                quantity=1,
+                price=10,
+                fee=0,
+                tax=0,
+            )
+
+        rows = self.service.list_trade_events(account_id=aid, symbol="SH000001", page=1, page_size=20)["items"]
+        self.assertEqual({row["symbol"] for row in rows}, {"SH000001", "000001.SH"})
 
     def test_corporate_actions_dividend_and_split(self) -> None:
         account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")

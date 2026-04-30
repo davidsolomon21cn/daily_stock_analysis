@@ -39,10 +39,11 @@ export interface PortfolioPositionItem {
   unrealizedPnlBase: number;
   unrealizedPnlPct?: number | null;
   valuationCurrency: string;
-  priceSource: string;
+  priceSource?: 'realtime_quote' | 'history_close' | 'missing' | string;
+  priceProvider?: string | null;
   priceDate?: string | null;
-  isStale: boolean;
-  isFallback: boolean;
+  priceStale?: boolean;
+  priceAvailable?: boolean;
 }
 
 export interface PortfolioAccountSnapshot {

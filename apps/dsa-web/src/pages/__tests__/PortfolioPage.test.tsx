@@ -320,10 +320,10 @@ describe('PortfolioPage FX refresh', () => {
     expect(await screen.findByText('汇率在线刷新已被禁用。')).toBeInTheDocument();
   });
 
-  it('renders backend-provided position valuation fields and stale fallback hint', async () => {
+  it('renders backend-provided position valuation fields and stale missing-price hint', async () => {
     getSnapshot.mockResolvedValueOnce(makeSnapshot({ fxStale: true, positions: [
-      { symbol: 'HK00700', market: 'hk', currency: 'HKD', quantity: 10, avgCost: 400, totalCost: 4000, lastPrice: 420, marketValueBase: 4200, unrealizedPnlBase: 200, unrealizedPnlPct: 5, valuationCurrency: 'HKD', priceSource: 'recent_close', priceDate: '2026-03-18', isStale: true, isFallback: false },
-      { symbol: 'AAPL', market: 'us', currency: 'USD', quantity: 5, avgCost: 100, totalCost: 500, lastPrice: 100, marketValueBase: 500, unrealizedPnlBase: 0, unrealizedPnlPct: 0, valuationCurrency: 'USD', priceSource: 'avg_cost_fallback', priceDate: null, isStale: true, isFallback: true },
+      { symbol: 'HK00700', market: 'hk', currency: 'HKD', quantity: 10, avgCost: 400, totalCost: 4000, lastPrice: 420, marketValueBase: 4200, unrealizedPnlBase: 200, unrealizedPnlPct: 5, valuationCurrency: 'HKD', priceSource: 'history_close', priceDate: '2026-03-18', priceStale: true, priceAvailable: true },
+      { symbol: 'AAPL', market: 'us', currency: 'USD', quantity: 5, avgCost: 100, totalCost: 500, lastPrice: 0, marketValueBase: 0, unrealizedPnlBase: 0, unrealizedPnlPct: null, valuationCurrency: 'USD', priceSource: 'missing', priceDate: null, priceStale: true, priceAvailable: false },
     ] }));
 
     render(<PortfolioPage />);
@@ -334,9 +334,9 @@ describe('PortfolioPage FX refresh', () => {
     expect(screen.getByText('420.0000')).toBeInTheDocument();
     expect(screen.getByText('HKD 4,200.00')).toBeInTheDocument();
     expect(screen.getByText('+5.00%')).toBeInTheDocument();
-    expect(screen.getByText('价格日期 2026-03-18，并非当日最新。')).toBeInTheDocument();
-    expect(screen.getByText('Fallback价')).toBeInTheDocument();
-    expect(screen.getByText('暂无可用收盘价，已回退为持仓成本价。')).toBeInTheDocument();
+    expect(screen.getByText('收盘价 · 2026-03-18')).toBeInTheDocument();
+    expect(screen.getByText('缺价')).toBeInTheDocument();
+    expect(screen.getAllByText('--').length).toBeGreaterThanOrEqual(2);
   });
 
   it('prefers disabled feedback over empty-pair feedback when refresh is disabled', async () => {

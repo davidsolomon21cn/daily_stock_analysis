@@ -1132,7 +1132,9 @@ class SystemConfigService:
             return "auth", False, "LLM authentication failed"
         if status_code in {402, 429} or any(token in lowered for token in ("quota", "rate limit", "too many requests", "insufficient_quota")):
             return "quota", True, "LLM request was rejected by quota or rate limiting"
-        if status_code == 404 or ("model" in lowered and any(token in lowered for token in ("not found", "does not exist", "unknown"))):
+        if status_code == 404:
+            return "network_error", False, "LLM model discovery endpoint could not be found"
+        if "model" in lowered and any(token in lowered for token in ("not found", "does not exist", "unknown")):
             return "model_not_found", False, "Configured model could not be found on this channel"
         if any(token in lowered for token in ("timeout", "timed out")):
             return "timeout", True, "LLM request timed out"

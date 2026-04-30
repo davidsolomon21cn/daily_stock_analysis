@@ -804,11 +804,14 @@ class SystemConfigServiceTestCase(unittest.TestCase):
     def test_discover_llm_channel_models_classifies_error_scenarios(self, mock_get) -> None:
         auth_response = Mock(ok=False, status_code=401, text="invalid api key sk-secret-value")
         auth_response.json.return_value = {"error": {"message": "invalid api key sk-secret-value"}}
+        not_found_response = Mock(ok=False, status_code=404, text="not found")
+        not_found_response.json.return_value = {"error": {"message": "not found"}}
         invalid_json_response = Mock(ok=True, status_code=200, text="<html>bad gateway</html>")
         invalid_json_response.json.side_effect = ValueError("invalid json")
 
         for response, error_code, stage, retryable in [
             (auth_response, "auth", "model_discovery", False),
+            (not_found_response, "network_error", "model_discovery", False),
             (invalid_json_response, "format_error", "response_parse", False),
         ]:
             with self.subTest(error_code=error_code):

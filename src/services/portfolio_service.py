@@ -10,8 +10,6 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
-from sqlalchemy import and_, desc, select
-
 from data_provider.base import canonical_stock_code, normalize_stock_code
 from src.config import get_config
 from src.repositories.portfolio_repo import (
@@ -20,7 +18,6 @@ from src.repositories.portfolio_repo import (
     PortfolioBusyError as RepoPortfolioBusyError,
     PortfolioRepository,
 )
-from src.storage import StockDaily
 
 logger = logging.getLogger(__name__)
 
@@ -73,13 +70,14 @@ class _AvgState:
     total_cost: float = 0.0
 
 
-@dataclass
+@dataclass(frozen=True)
 class _ResolvedPositionPrice:
-    value: float
+    price: float
     source: str
     price_date: Optional[date]
     is_stale: bool
-    is_fallback: bool
+    is_available: bool
+    provider: Optional[str] = None
 
 
 class PortfolioService:
@@ -999,30 +997,33 @@ class PortfolioService:
                     }
                 )
 
-            price_meta = self._resolve_position_price(
-                symbol=symbol,
-                avg_cost=avg_cost,
-                as_of_date=as_of_date,
-            )
+            price_info = self._resolve_position_price(symbol=symbol, as_of_date=as_of_date)
+            last_price = price_info.price
 
-            local_market_value = qty * float(price_meta.value)
-            market_base, stale_market, _ = self._convert_amount(
-                amount=local_market_value,
-                from_currency=currency,
-                to_currency=account.base_currency,
-                as_of_date=as_of_date,
-            )
-            cost_base, stale_cost, _ = self._convert_amount(
-                amount=total_cost,
-                from_currency=currency,
-                to_currency=account.base_currency,
-                as_of_date=as_of_date,
-            )
-            unrealized_base = market_base - cost_base
+            if price_info.is_available:
+                local_market_value = qty * float(last_price)
+                market_base, stale_market, _ = self._convert_amount(
+                    amount=local_market_value,
+                    from_currency=currency,
+                    to_currency=account.base_currency,
+                    as_of_date=as_of_date,
+                )
+                cost_base, stale_cost, _ = self._convert_amount(
+                    amount=total_cost,
+                    from_currency=currency,
+                    to_currency=account.base_currency,
+                    as_of_date=as_of_date,
+                )
+                unrealized_base = market_base - cost_base
+                fx_stale = fx_stale or stale_market or stale_cost
+            else:
+                market_base = 0.0
+                cost_base = 0.0
+                unrealized_base = 0.0
+
             unrealized_pct = None
             if abs(cost_base) > EPS:
                 unrealized_pct = unrealized_base / cost_base * 100.0
-            fx_stale = fx_stale or stale_market or stale_cost
 
             position_rows.append(
                 {
@@ -1032,15 +1033,16 @@ class PortfolioService:
                     "quantity": round(qty, 8),
                     "avg_cost": round(avg_cost, 8),
                     "total_cost": round(total_cost, 8),
-                    "last_price": round(float(price_meta.value), 8),
+                    "last_price": round(float(last_price), 8),
                     "market_value_base": round(market_base, 8),
                     "unrealized_pnl_base": round(unrealized_base, 8),
                     "unrealized_pnl_pct": round(unrealized_pct, 8) if unrealized_pct is not None else None,
                     "valuation_currency": account.base_currency,
-                    "price_source": price_meta.source,
-                    "price_date": price_meta.price_date.isoformat() if price_meta.price_date else None,
-                    "is_stale": bool(price_meta.is_stale),
-                    "is_fallback": bool(price_meta.is_fallback),
+                    "price_source": price_info.source,
+                    "price_provider": price_info.provider,
+                    "price_date": price_info.price_date.isoformat() if price_info.price_date else None,
+                    "price_stale": price_info.is_stale,
+                    "price_available": price_info.is_available,
                 }
             )
 
@@ -1049,44 +1051,66 @@ class PortfolioService:
 
         return position_rows, lot_rows, market_value_base, total_cost_base, fx_stale
 
-    def _resolve_position_price(
-        self,
-        *,
-        symbol: str,
-        avg_cost: float,
-        as_of_date: date,
-    ) -> _ResolvedPositionPrice:
-        normalized_symbol = self._normalize_symbol(symbol)
-        with self.repo.db.get_session() as session:
-            row = session.execute(
-                select(StockDaily)
-                .where(
-                    and_(
-                        StockDaily.code == normalized_symbol,
-                        StockDaily.date <= as_of_date,
-                    )
-                )
-                .order_by(desc(StockDaily.date))
-                .limit(1)
-            ).scalar_one_or_none()
+    def _resolve_position_price(self, *, symbol: str, as_of_date: date) -> _ResolvedPositionPrice:
+        today = date.today()
 
-        if row is not None and row.close is not None and float(row.close) > 0:
-            price_date = row.date if isinstance(row.date, date) else None
-            return _ResolvedPositionPrice(
-                value=float(row.close),
-                source="recent_close",
-                price_date=price_date,
-                is_stale=price_date is None or price_date < as_of_date,
-                is_fallback=False,
-            )
+        close = self.repo.get_latest_close_with_date(symbol=symbol, as_of=as_of_date)
+        if close is not None:
+            close_price, close_date = close
+            if close_price > 0:
+                return _ResolvedPositionPrice(
+                    price=float(close_price),
+                    source="history_close",
+                    price_date=close_date,
+                    is_stale=close_date < as_of_date,
+                    is_available=True,
+                )
+
+        if as_of_date == today:
+            realtime_price, provider = self._fetch_realtime_position_price(symbol)
+            if realtime_price is not None and realtime_price > 0:
+                return _ResolvedPositionPrice(
+                    price=float(realtime_price),
+                    source="realtime_quote",
+                    price_date=today,
+                    is_stale=False,
+                    is_available=True,
+                    provider=provider,
+                )
 
         return _ResolvedPositionPrice(
-            value=max(0.0, float(avg_cost)),
-            source="avg_cost_fallback",
+            price=0.0,
+            source="missing",
             price_date=None,
             is_stale=True,
-            is_fallback=True,
+            is_available=False,
         )
+
+    @staticmethod
+    def _fetch_realtime_position_price(symbol: str) -> Tuple[Optional[float], Optional[str]]:
+        try:
+            from data_provider.base import DataFetcherManager
+
+            quote = DataFetcherManager().get_realtime_quote(symbol, log_final_failure=False)
+        except Exception as exc:
+            logger.warning("Failed to fetch realtime portfolio price for %s: %s", symbol, exc)
+            return None, None
+
+        if quote is None:
+            return None, None
+
+        price = getattr(quote, "price", None)
+        try:
+            numeric_price = float(price)
+        except (TypeError, ValueError):
+            return None, None
+
+        if numeric_price <= 0:
+            return None, None
+
+        source = getattr(quote, "source", None)
+        provider = getattr(source, "value", None) or (str(source) if source is not None else None)
+        return numeric_price, provider
 
     @staticmethod
     def _normalize_symbol(symbol: str) -> str:
@@ -1094,7 +1118,8 @@ class PortfolioService:
 
     @classmethod
     def _build_symbol_filter_values(cls, symbol: str) -> List[str]:
-        normalized = cls._normalize_symbol(symbol)
+        original = (symbol or "").strip().upper()
+        normalized = cls._normalize_symbol(original)
         if not normalized:
             return []
 
@@ -1102,35 +1127,46 @@ class PortfolioService:
         values: List[str] = []
 
         def _add(value: Optional[str]) -> None:
-            if not value:
-                return
-            candidate = canonical_stock_code(value)
+            candidate = (value or "").strip().upper()
             if candidate and candidate not in seen:
                 seen.add(candidate)
                 values.append(candidate)
 
-        _add(symbol)
+        _add(original)
         _add(normalized)
+
         if normalized.startswith("HK"):
             hk_digits = normalized[2:]
             if hk_digits.isdigit() and len(hk_digits) == 5:
                 legacy_hk_digits = str(int(hk_digits))
-                _add(legacy_hk_digits)
+                _add(f"HK{hk_digits}")
                 _add(f"HK{legacy_hk_digits}")
                 _add(f"{hk_digits}.HK")
                 _add(f"{legacy_hk_digits}.HK")
+            return values
+
+        explicit_exchange: Optional[str] = None
+        if len(original) >= 8 and original[:2] in {"SH", "SZ", "BJ"} and original[2:].isdigit():
+            explicit_exchange = original[:2]
+        elif "." in original:
+            base, suffix = original.rsplit(".", 1)
+            if base.isdigit() and suffix in {"SH", "SS", "SZ", "BJ"}:
+                explicit_exchange = "SH" if suffix == "SS" else suffix
+
         if normalized.isdigit():
             if len(normalized) == 6:
-                _add(f"SH{normalized}")
-                _add(f"SZ{normalized}")
-                _add(f"BJ{normalized}")
-                _add(f"{normalized}.SH")
-                _add(f"{normalized}.SS")
-                _add(f"{normalized}.SZ")
-                _add(f"{normalized}.BJ")
+                exchanges = [explicit_exchange] if explicit_exchange else ["SH", "SZ", "BJ"]
+                for exchange in exchanges:
+                    if exchange is None:
+                        continue
+                    _add(f"{exchange}{normalized}")
+                    _add(f"{normalized}.{'SS' if exchange == 'SH' else exchange}")
+                    if exchange == "SH":
+                        _add(f"{normalized}.SH")
             elif len(normalized) == 5:
                 _add(f"HK{normalized}")
                 _add(f"{normalized}.HK")
+
         return values
 
     @staticmethod
