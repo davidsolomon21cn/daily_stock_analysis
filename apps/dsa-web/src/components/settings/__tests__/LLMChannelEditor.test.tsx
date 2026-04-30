@@ -554,6 +554,44 @@ describe('LLMChannelEditor', () => {
     expect(screen.getByText(/该渠道返回的 \/models 响应格式不兼容，请改为手动填写模型列表。/i)).toBeInTheDocument();
   });
 
+  it('maps discovery empty responses to the /models troubleshooting hint', async () => {
+    discoverLLMChannelModels.mockResolvedValue({
+      success: false,
+      message: 'No model IDs returned from /models response',
+      error: 'Empty model discovery response',
+      errorCode: 'empty_response',
+      stage: 'model_discovery',
+      retryable: false,
+      details: {},
+      resolvedProtocol: 'openai',
+      models: [],
+      latencyMs: null,
+    });
+
+    render(
+      <LLMChannelEditor
+        items={[
+          { key: 'LLM_CHANNELS', value: 'openai' },
+          { key: 'LLM_OPENAI_PROTOCOL', value: 'openai' },
+          { key: 'LLM_OPENAI_BASE_URL', value: 'https://api.openai.com/v1' },
+          { key: 'LLM_OPENAI_ENABLED', value: 'true' },
+          { key: 'LLM_OPENAI_API_KEY', value: 'secret-key' },
+          { key: 'LLM_OPENAI_MODELS', value: '' },
+        ]}
+        configVersion="v1"
+        maskToken="******"
+        onSaved={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /OpenAI 官方/i }));
+    fireEvent.click(screen.getByRole('button', { name: '获取模型' }));
+
+    expect(await screen.findByText(/模型发现 · 空响应：No model IDs returned from \/models response/i)).toBeInTheDocument();
+    expect(screen.getByText(/该渠道的 \/models 接口未返回可用模型 ID/i)).toBeInTheDocument();
+    expect(screen.queryByText(/切换兼容模型、关闭额外响应模式/i)).not.toBeInTheDocument();
+  });
+
   it('does not apply stale discovery response after channel list re-sync', async () => {
     let resolvePendingFirst!: (value: unknown) => void;
     const pendingFirst = new Promise((resolve) => {

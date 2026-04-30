@@ -670,6 +670,9 @@ function getLlmTroubleshootingHint(
       ? '该渠道返回的 /models 响应格式不兼容，请改为手动填写模型列表。'
       : '返回结构与预期不一致，请确认该渠道兼容 Chat Completions 接口。';
   }
+  if (code === 'empty_response' && (context === 'discovery' || stage === 'model_discovery')) {
+    return '该渠道的 /models 接口未返回可用模型 ID；请检查 Base URL 是否指向兼容的模型列表接口，或改为手动填写模型列表。';
+  }
   return LLM_TROUBLESHOOTING_HINTS[code || ''];
 }
 
