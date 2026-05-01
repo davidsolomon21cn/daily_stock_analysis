@@ -58,6 +58,8 @@ class StatusCommand(BotCommand):
     
     def _collect_status(self, config) -> dict:
         """收集系统状态信息"""
+        from src.config import _uses_direct_env_provider
+
         status = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
@@ -68,6 +70,7 @@ class StatusCommand(BotCommand):
         
         # AI 配置状态
         llm_channels = getattr(config, "llm_channels", []) or []
+        llm_model_list = getattr(config, "llm_model_list", []) or []
         llm_model = (getattr(config, "litellm_model", "") or "").strip()
         agent_model = (getattr(config, "agent_litellm_model", "") or "").strip()
         status["ai_primary_model"] = llm_model
@@ -77,19 +80,18 @@ class StatusCommand(BotCommand):
             for channel in llm_channels
             if str(channel.get("name") or "").strip()
         ]
-        status["ai_yaml"] = bool(getattr(config, "litellm_config_path", None))
+        status["ai_yaml"] = (
+            getattr(config, "llm_models_source", "") == "litellm_config"
+            and bool(llm_model_list)
+        )
         status["ai_legacy_keys"] = {
             "Gemini": bool(getattr(config, "gemini_api_keys", [])),
             "OpenAI": bool(getattr(config, "openai_api_keys", [])),
             "Anthropic": bool(getattr(config, "anthropic_api_keys", [])),
             "DeepSeek": bool(getattr(config, "deepseek_api_keys", [])),
         }
-        status["ai_available"] = bool(
-            llm_model
-            or status["ai_channels"]
-            or status["ai_yaml"]
-            or any(status["ai_legacy_keys"].values())
-        )
+        has_direct_env_model = bool(llm_model) and _uses_direct_env_provider(llm_model)
+        status["ai_available"] = bool(llm_model_list or has_direct_env_model)
         
         # 搜索服务状态
         status["search_bocha"] = len(config.bocha_api_keys) > 0
@@ -184,7 +186,7 @@ class StatusCommand(BotCommand):
             f"• 自定义 Webhook: {icon(status['notify_custom'])}",
             f"• Discord: {icon(status['notify_discord'])}",
             f"• Slack: {icon(status['notify_slack'])}",
-            f"• PushPlus/Pushover/Server酱: {icon(status['notify_push'])}",
+            f"• PushPlus/Pushover/Server酱3: {icon(status['notify_push'])}",
         ])
         
         # AI 服务总体状态
