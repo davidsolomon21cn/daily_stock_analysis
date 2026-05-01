@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [新功能] 自定义 Webhook 支持 `CUSTOM_WEBHOOK_BODY_TEMPLATE` JSON body 模板，便于适配 AstrBot、NapCat 和自建推送服务。
 - [改进] Web LLM 渠道编辑器新增 MiniMax 官方和火山方舟预设，自动填充 Base URL 与推荐模型示例。
 - [修复] 统一持仓快照输出现价/市值/浮盈亏/收益率与价格元信息，并为 LLM 渠道测试补充结构化诊断与设置页排障提示。
-- [文档] 补充 LLM 渠道编辑器的官方来源、依赖兼容窗口、保存时的运行时模型清理规则，以及旧配置回退路径说明。
+- [文档] 补充 MiniMax / 火山方舟 Ark 预设来源链路、官方文档引用与保存后兼容验证（含受限链路）说明，更新 LLM 渠道设置回退/兼容条目。
 - [测试] 补齐 task_queue 运行时配置同步回归证据，明确 `tests/test_task_queue_config_sync.py` 作为本轮验收项。
 
 ## [3.14.2] - 2026-04-30

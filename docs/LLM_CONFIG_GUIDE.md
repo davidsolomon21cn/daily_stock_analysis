@@ -149,6 +149,17 @@ LITELLM_MODEL=ollama/qwen3:8b
 - 如果你通过 OpenAI Compatible 渠道接 MiniMax，请在渠道模型里直接填写 `minimax/<模型名>`，例如 `minimax/MiniMax-M1`。
 - Web 设置页里的主模型、Agent 主模型、Fallback、Vision 下拉会保留这个值原样展示，不会再错误改写成 `openai/minimax/<模型名>`。
 
+### MiniMax 与火山方舟（Volcengine Ark）预设依据与兼容验证
+
+- 官方来源（用于默认 Base URL / 示例模型说明）：
+  - MiniMax OpenAI 兼容接入与文本聊天：<https://platform.minimax.io/docs/api-reference/text-openai-api>
+  - MiniMax OpenAI 风格模型列表（含 `MiniMax-M2.7` / `MiniMax-M2.5`）：<https://platform.minimax.io/docs/api-reference/models/openai/list-models>
+  - Volcengine Ark 对话与 SDK 快速接入示例（默认 Base URL）：<https://www.volcengine.com/docs/82379/1168048>
+  - Volcengine Ark 模型列表（用于示例模型前缀/版本对照）：<https://www.volcengine.com/docs/84313/2288351>
+- 本次新增预设值为表单默认值，运行时是否可达仍以保存后的链路验证为准：
+  - 已有回归测试：`tests/test_llm_channel_config.py::test_minimax_prefixed_models_are_not_rewritten_for_openai_compatible_channels` 覆盖 MiniMax 前缀归一化；`apps/dsa-web/src/components/settings/__tests__/LLMChannelEditor.test.tsx` 覆盖 MiniMax 与火山方舟在 Web 的默认参数和保存路径。
+  - 受限说明：当前 CI 未提供稳定可复用的 MiniMax / Volcengine 测试 Key，无法执行真实联网 `保存后 + python test_env.py --llm` 验证；建议在实际部署完成后按“保存渠道 → 运行 `python test_env.py --llm`”做一次完整兼容回归。
+
 ### 问股 Agent / LiteLLM 配置兼容说明
 
 - 问股 Agent 运行时沿用与普通分析相同的三层优先级：`LITELLM_CONFIG`（LiteLLM YAML）> `LLM_CHANNELS` > legacy provider keys。只要上层配置有效生效，下层配置就不会再参与本次请求。

@@ -149,6 +149,17 @@ LITELLM_MODEL=ollama/qwen3:8b
 - If you access MiniMax through an OpenAI-compatible channel, enter the model as `minimax/<model-name>` in the channel model list, for example `minimax/MiniMax-M1`.
 - The Web settings page now keeps that value unchanged in Primary, Agent Primary, Fallback, and Vision selectors instead of rewriting it to `openai/minimax/<model-name>`.
 
+### MiniMax & Volcengine Ark Preset Sources and Compatibility Check
+
+- Official references used for defaults:
+  - MiniMax OpenAI-compatible OpenAI API guide: <https://platform.minimax.io/docs/api-reference/text-openai-api>
+  - MiniMax model list (OpenAI-compatible section, includes `MiniMax-M2.7` / `MiniMax-M2.5`): <https://platform.minimax.io/docs/api-reference/models/openai/list-models>
+  - Volcengine Ark conversation API / SDK quick start (default base URL): <https://www.volcengine.com/docs/82379/1168048>
+  - Volcengine Ark model list (for example model versions): <https://www.volcengine.com/docs/84313/2288351>
+- Runtime compatibility evidence and limitations:
+  - Existing regressions: `tests/test_llm_channel_config.py::test_minimax_prefixed_models_are_not_rewritten_for_openai_compatible_channels` validates Minimax model canonicalization; `apps/dsa-web/src/components/settings/__tests__/LLMChannelEditor.test.tsx` validates MiniMax and Volcengine Ark preset defaults plus save path behavior.
+  - Limitation: this environment has no shared MiniMax / Volcengine live keys for CI, so a real "save + `python test_env.py --llm`" round-trip cannot be executed here. In production verification, run "Add preset -> Save -> `python test_env.py --llm`" to confirm actual runtime reachability.
+
 ### Ask-Stock Agent / LiteLLM compatibility notes
 
 - The ask-stock Agent follows the same three-tier runtime priority as the regular analyzer: `LITELLM_CONFIG` (LiteLLM YAML) > `LLM_CHANNELS` > legacy provider keys. Once an upper tier is valid and active, lower tiers are ignored for that request.
