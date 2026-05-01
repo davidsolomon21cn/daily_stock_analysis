@@ -186,6 +186,7 @@ class EventMonitor:
     def __init__(self):
         self.rules: List[AlertRule] = []
         self._callbacks: List[Callable[[TriggeredAlert], None]] = []
+        self._fetcher_manager: Optional[Any] = None
 
     def add_alert(self, rule: AlertRule) -> None:
         """Register a new alert rule."""
@@ -260,16 +261,23 @@ class EventMonitor:
         # implemented as hooks for future extension
         return None
 
+    def _get_fetcher_manager(self) -> Any:
+        if self._fetcher_manager is None:
+            from data_provider import DataFetcherManager
+
+            self._fetcher_manager = DataFetcherManager()
+        return self._fetcher_manager
+
+    def _fetch_realtime_quote(self, stock_code: str) -> Any:
+        return self._get_fetcher_manager().get_realtime_quote(stock_code)
+
+    async def _get_realtime_quote(self, stock_code: str) -> Any:
+        return await asyncio.to_thread(self._fetch_realtime_quote, stock_code)
+
     async def _check_price(self, rule: PriceAlert) -> Optional[TriggeredAlert]:
         """Check price alert against realtime quote."""
         try:
-            def _fetch_quote():
-                from data_provider import DataFetcherManager
-
-                fm = DataFetcherManager()
-                return fm.get_realtime_quote(rule.stock_code)
-
-            quote = await asyncio.to_thread(_fetch_quote)
+            quote = await self._get_realtime_quote(rule.stock_code)
             if quote is None:
                 return None
 
@@ -297,13 +305,7 @@ class EventMonitor:
     async def _check_price_change(self, rule: PriceChangeAlert) -> Optional[TriggeredAlert]:
         """Check price-change percentage alert against realtime quote."""
         try:
-            def _fetch_quote():
-                from data_provider import DataFetcherManager
-
-                fm = DataFetcherManager()
-                return fm.get_realtime_quote(rule.stock_code)
-
-            quote = await asyncio.to_thread(_fetch_quote)
+            quote = await self._get_realtime_quote(rule.stock_code)
             if quote is None:
                 return None
 
@@ -414,7 +416,7 @@ class EventMonitor:
                     rule = PriceChangeAlert(
                         stock_code=stock_code,
                         direction=entry.get("direction", "up").lower(),
-                        change_pct=float(entry.get("change_pct", 3.0)),
+                        change_pct=float(entry["change_pct"]),
                     )
                 elif alert_type == AlertType.VOLUME_SPIKE.value:
                     rule = VolumeAlert(

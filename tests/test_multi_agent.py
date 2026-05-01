@@ -1131,6 +1131,21 @@ class TestEventMonitor(unittest.TestCase):
         with self.assertRaises(ValueError):
             monitor.add_alert(SentimentAlert(stock_code="600519"))
 
+    def test_from_dict_list_skips_price_change_without_change_pct(self):
+        from src.agent.events import EventMonitor
+
+        data = [
+            {
+                "stock_code": "300750",
+                "alert_type": "price_change_percent",
+                "direction": "up",
+            }
+        ]
+
+        monitor = EventMonitor.from_dict_list(data)
+
+        self.assertEqual(monitor.rules, [])
+
 
 class TestEventMonitorAsync(unittest.IsolatedAsyncioTestCase):
     """Test async EventMonitor checks offload blocking fetches."""
@@ -1176,6 +1191,27 @@ class TestEventMonitorAsync(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNotNone(triggered)
         self.assertEqual(triggered.current_value, 2.35)
+
+    async def test_realtime_rules_reuse_fetcher_manager(self):
+        from src.agent.events import EventMonitor, PriceAlert, PriceChangeAlert
+
+        monitor = EventMonitor()
+        monitor.add_alert(PriceAlert(stock_code="600519", direction="above", price=1800.0))
+        monitor.add_alert(PriceChangeAlert(stock_code="600519", direction="up", change_pct=3.0))
+        manager = MagicMock()
+        manager.get_realtime_quote.return_value = SimpleNamespace(price=1810.0, change_pct=3.25)
+
+        async def _run_inline(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        with patch("data_provider.DataFetcherManager", return_value=manager) as manager_factory, patch(
+            "src.agent.events.asyncio.to_thread", new=_run_inline
+        ):
+            triggered = await monitor.check_all()
+
+        manager_factory.assert_called_once_with()
+        self.assertEqual(manager.get_realtime_quote.call_count, 2)
+        self.assertEqual(len(triggered), 2)
 
     async def test_check_volume_safe_when_fetch_returns_none(self):
         """_check_volume must not crash when get_daily_data returns None."""
@@ -1767,19 +1803,23 @@ class TestAgentResearchEndpoint(unittest.IsolatedAsyncioTestCase):
             is_agent_available=lambda: True,
         )
 
-        with patch("api.v1.endpoints.agent.get_config", return_value=config), \
-             patch("api.v1.endpoints.agent._run_research_in_background", new=AsyncMock(return_value=SimpleNamespace(
-                 success=False,
-                 report="",
-                 sub_questions=[],
-                 findings_count=0,
-                 total_tokens=0,
-                 duration_s=1.0,
-                 error="Deep research timed out after 1s",
-                 timed_out=True,
-             ))), \
-             patch("src.agent.factory.get_tool_registry", return_value=MagicMock()), \
-             patch("src.agent.llm_adapter.LLMToolAdapter", return_value=MagicMock()):
+        research_result = AsyncMock(return_value=SimpleNamespace(
+            success=False,
+            report="",
+            sub_questions=[],
+            findings_count=0,
+            total_tokens=0,
+            duration_s=1.0,
+            error="Deep research timed out after 1s",
+            timed_out=True,
+        ))
+
+        with (
+            patch("api.v1.endpoints.agent.get_config", return_value=config),
+            patch("api.v1.endpoints.agent._run_research_in_background", new=research_result),
+            patch("src.agent.factory.get_tool_registry", return_value=MagicMock()),
+            patch("src.agent.llm_adapter.LLMToolAdapter", return_value=MagicMock()),
+        ):
             response = await agent_research(ResearchRequest(question="600519 风险"))
 
         self.assertFalse(response.success)
