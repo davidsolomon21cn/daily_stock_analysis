@@ -334,6 +334,61 @@ describe('LLMChannelEditor', () => {
     expect(screen.getByText(warningMessage)).toBeInTheDocument();
   });
 
+  it('clears failed-save feedback after saved props refresh', async () => {
+    const initialItems = [
+      { key: 'LLM_CHANNELS', value: 'openai' },
+      { key: 'LLM_OPENAI_PROTOCOL', value: 'openai' },
+      { key: 'LLM_OPENAI_BASE_URL', value: 'https://api.openai.com/v1' },
+      { key: 'LLM_OPENAI_ENABLED', value: 'true' },
+      { key: 'LLM_OPENAI_API_KEY', value: 'secret-key' },
+      { key: 'LLM_OPENAI_MODELS', value: 'gpt-4o-mini' },
+    ];
+    const onSaved = vi.fn(async () => {
+      throw new Error('refresh failed');
+    });
+
+    update.mockResolvedValue({
+      success: true,
+      configVersion: 'v2',
+      appliedCount: 1,
+      skippedMaskedCount: 0,
+      reloadTriggered: true,
+      updatedKeys: ['LLM_OPENAI_BASE_URL'],
+      warnings: [],
+    });
+
+    const renderResult = render(
+      <LLMChannelEditor
+        items={initialItems}
+        configVersion="v1"
+        maskToken="******"
+        onSaved={onSaved}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /OpenAI 官方/i }));
+    fireEvent.change(screen.getByLabelText('Base URL'), {
+      target: { value: 'https://api.openai.com/v1/test' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
+
+    expect(await screen.findByText('refresh failed')).toBeInTheDocument();
+
+    const savedItems = update.mock.calls[0][0].items;
+    renderResult.rerender(
+      <LLMChannelEditor
+        items={savedItems}
+        configVersion="v2"
+        maskToken="******"
+        onSaved={onSaved}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText('refresh failed')).not.toBeInTheDocument();
+    });
+  });
+
   it('keeps direct-env provider runtime models while saving channel changes', async () => {
     update.mockResolvedValue({
       success: true,

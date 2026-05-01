@@ -1142,11 +1142,11 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
         items: updateItems,
       });
       const responseWarnings = response.warnings || [];
+      await onSaved(updateItems);
       pendingSaveFeedbackFingerprintRef.current = {
         channels: JSON.stringify(parseChannelsFromItems(updateItems)),
         runtime: JSON.stringify(parseRuntimeConfigFromItems(updateItems)),
       };
-      await onSaved(updateItems);
       setSaveWarnings(responseWarnings);
       setSaveMessage({ type: 'success', text: managesRuntimeConfig ? 'AI 配置已保存' : '渠道配置已保存' });
     } catch (error: unknown) {
