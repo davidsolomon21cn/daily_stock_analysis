@@ -99,7 +99,8 @@ class StatusCommand(BotCommand):
             and llm_model not in available_router_model_set
         )
         status["ai_available"] = bool(
-            has_direct_env_model or (llm_model_list and primary_model_reachable)
+            llm_model
+            and (has_direct_env_model or (llm_model_list and primary_model_reachable))
         )
         
         # 搜索服务状态
