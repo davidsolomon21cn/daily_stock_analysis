@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [测试] 补齐 task_queue 运行时配置同步回归证据，明确 `tests/test_task_queue_config_sync.py` 作为本轮验收项。
 - [改进] Bot `/status` 展示统一 LLM 主模型、Agent 模型、渠道模式、YAML 配置和更多通知渠道状态。
 - [改进] Web LLM 渠道编辑器补齐 MiniMax 与火山方舟预设，并新增常用服务商 `.env` 模板速查文档。
+- [修复] 将 MiniMax 预设调整为官方 OpenAI-compatible Base URL 和当前模型示例，并补充 MiniMax、火山方舟、LiteLLM 兼容来源与回退说明。
 
 ## [3.14.2] - 2026-04-30
 

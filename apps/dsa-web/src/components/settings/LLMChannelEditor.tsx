@@ -48,8 +48,8 @@ const CHANNEL_PRESETS: Record<string, ChannelPreset> = {
   minimax: {
     label: 'MiniMax 官方',
     protocol: 'openai',
-    baseUrl: 'https://api.minimax.chat/v1',
-    placeholder: 'MiniMax-M1,MiniMax-Text-01',
+    baseUrl: 'https://api.minimaxi.com/v1',
+    placeholder: 'MiniMax-M2.7,MiniMax-M2.7-highspeed',
   },
   volcengine: {
     label: '火山方舟（豆包）',
@@ -919,6 +919,7 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
 
   const prevChannelsRef = useRef(channelsFingerprint);
   const prevRuntimeRef = useRef(runtimeFingerprint);
+  const pendingSaveFeedbackFingerprintRef = useRef<{ channels: string; runtime: string } | null>(null);
   const discoveryNonceRef = useRef<Record<string, number>>({});
   const discoveryRequestIdRef = useRef(0);
 
@@ -928,6 +929,10 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
     }
     prevChannelsRef.current = channelsFingerprint;
     prevRuntimeRef.current = runtimeFingerprint;
+    const pendingSaveFeedbackFingerprint = pendingSaveFeedbackFingerprintRef.current;
+    const preserveSaveFeedback = pendingSaveFeedbackFingerprint?.channels === channelsFingerprint
+      && pendingSaveFeedbackFingerprint.runtime === runtimeFingerprint;
+    pendingSaveFeedbackFingerprintRef.current = null;
     setChannels(initialChannels);
     setRuntimeConfig(initialRuntimeConfig);
     setVisibleKeys({});
@@ -935,8 +940,10 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
     setDiscoveryStates({});
     setExpandedRows({});
     discoveryNonceRef.current = {};
-    setSaveMessage(null);
-    setSaveWarnings([]);
+    if (!preserveSaveFeedback) {
+      setSaveMessage(null);
+      setSaveWarnings([]);
+    }
     setIsCollapsed(false);
   }, [channelsFingerprint, runtimeFingerprint, initialChannels, initialRuntimeConfig]);
 
@@ -1135,6 +1142,10 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
         items: updateItems,
       });
       const responseWarnings = response.warnings || [];
+      pendingSaveFeedbackFingerprintRef.current = {
+        channels: JSON.stringify(parseChannelsFromItems(updateItems)),
+        runtime: JSON.stringify(parseRuntimeConfigFromItems(updateItems)),
+      };
       await onSaved(updateItems);
       setSaveWarnings(responseWarnings);
       setSaveMessage({ type: 'success', text: managesRuntimeConfig ? 'AI 配置已保存' : '渠道配置已保存' });

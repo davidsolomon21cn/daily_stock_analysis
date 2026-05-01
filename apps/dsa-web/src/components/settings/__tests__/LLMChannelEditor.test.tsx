@@ -123,7 +123,7 @@ describe('LLMChannelEditor', () => {
   });
 
   it.each([
-    ['minimax', /MiniMax 官方/i, 'https://api.minimax.chat/v1', 'MiniMax-M1,MiniMax-Text-01'],
+    ['minimax', /MiniMax 官方/i, 'https://api.minimaxi.com/v1', 'MiniMax-M2.7,MiniMax-M2.7-highspeed'],
     ['volcengine', /火山方舟/i, 'https://ark.cn-beijing.volces.com/api/v3', 'doubao-seed-1-6-250615,doubao-seed-1-6-thinking-250615'],
   ])('uses %s OpenAI-compatible defaults when adding the official preset', async (preset, buttonName, baseUrl, models) => {
     render(
@@ -180,8 +180,8 @@ describe('LLMChannelEditor', () => {
       expect.arrayContaining([
         expect.objectContaining({ key: 'LLM_CHANNELS', value: 'minimax' }),
         expect.objectContaining({ key: 'LLM_MINIMAX_PROTOCOL', value: 'openai' }),
-        expect.objectContaining({ key: 'LLM_MINIMAX_BASE_URL', value: 'https://api.minimax.chat/v1' }),
-        expect.objectContaining({ key: 'LLM_MINIMAX_MODELS', value: 'MiniMax-M1,MiniMax-Text-01' }),
+        expect.objectContaining({ key: 'LLM_MINIMAX_BASE_URL', value: 'https://api.minimaxi.com/v1' }),
+        expect.objectContaining({ key: 'LLM_MINIMAX_MODELS', value: 'MiniMax-M2.7,MiniMax-M2.7-highspeed' }),
       ]),
     );
   });
