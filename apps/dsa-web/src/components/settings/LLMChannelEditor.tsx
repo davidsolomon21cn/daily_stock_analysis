@@ -45,6 +45,18 @@ const CHANNEL_PRESETS: Record<string, ChannelPreset> = {
     baseUrl: 'https://api.moonshot.cn/v1',
     placeholder: 'moonshot-v1-8k',
   },
+  minimax: {
+    label: 'MiniMax 官方',
+    protocol: 'openai',
+    baseUrl: 'https://api.minimax.chat/v1',
+    placeholder: 'MiniMax-M1,MiniMax-Text-01',
+  },
+  volcengine: {
+    label: '火山方舟（豆包）',
+    protocol: 'openai',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    placeholder: 'doubao-seed-1-6-250615,doubao-seed-1-6-thinking-250615',
+  },
   siliconflow: {
     label: '硅基流动（SiliconFlow）',
     protocol: 'openai',

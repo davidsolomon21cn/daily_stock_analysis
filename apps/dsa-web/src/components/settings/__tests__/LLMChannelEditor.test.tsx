@@ -122,6 +122,70 @@ describe('LLMChannelEditor', () => {
     expect(screen.getByLabelText('模型（逗号分隔）')).toHaveValue('deepseek-v4-flash,deepseek-v4-pro');
   });
 
+  it.each([
+    ['minimax', /MiniMax 官方/i, 'https://api.minimax.chat/v1', 'MiniMax-M1,MiniMax-Text-01'],
+    ['volcengine', /火山方舟/i, 'https://ark.cn-beijing.volces.com/api/v3', 'doubao-seed-1-6-250615,doubao-seed-1-6-thinking-250615'],
+  ])('uses %s OpenAI-compatible defaults when adding the official preset', async (preset, buttonName, baseUrl, models) => {
+    render(
+      <LLMChannelEditor
+        items={[]}
+        configVersion="v1"
+        maskToken="******"
+        onSaved={() => {}}
+      />
+    );
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: preset } });
+    fireEvent.click(screen.getByRole('button', { name: '+ 添加渠道' }));
+
+    await screen.findByRole('button', { name: buttonName });
+    expect(screen.getAllByRole('combobox').some((select) => (
+      select instanceof HTMLSelectElement && select.value === 'openai'
+    ))).toBe(true);
+    expect(screen.getByLabelText('Base URL')).toHaveValue(baseUrl);
+    expect(screen.getByLabelText('模型（逗号分隔）')).toHaveValue(models);
+  });
+
+  it('saves the MiniMax preset into LLM channel env keys', async () => {
+    update.mockResolvedValue({
+      success: true,
+      configVersion: 'v2',
+      appliedCount: 1,
+      skippedMaskedCount: 0,
+      reloadTriggered: true,
+      updatedKeys: ['LLM_CHANNELS', 'LLM_MINIMAX_PROTOCOL', 'LLM_MINIMAX_BASE_URL', 'LLM_MINIMAX_MODELS'],
+      warnings: [],
+    });
+
+    render(
+      <LLMChannelEditor
+        items={[]}
+        configVersion="v1"
+        maskToken="******"
+        onSaved={() => {}}
+      />
+    );
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'minimax' } });
+    fireEvent.click(screen.getByRole('button', { name: '+ 添加渠道' }));
+    await screen.findByRole('button', { name: /MiniMax 官方/i });
+    fireEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
+
+    await waitFor(() => {
+      expect(update).toHaveBeenCalled();
+    });
+
+    const updatePayload = update.mock.calls[0][0];
+    expect(updatePayload.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'LLM_CHANNELS', value: 'minimax' }),
+        expect.objectContaining({ key: 'LLM_MINIMAX_PROTOCOL', value: 'openai' }),
+        expect.objectContaining({ key: 'LLM_MINIMAX_BASE_URL', value: 'https://api.minimax.chat/v1' }),
+        expect.objectContaining({ key: 'LLM_MINIMAX_MODELS', value: 'MiniMax-M1,MiniMax-Text-01' }),
+      ]),
+    );
+  });
+
   it('sanitizes stale runtime models before saving DeepSeek V4 channel changes', async () => {
     update.mockResolvedValue({
       success: true,

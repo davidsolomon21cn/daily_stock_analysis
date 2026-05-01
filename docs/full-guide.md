@@ -184,7 +184,7 @@ daily_stock_analysis/
 
 ### AI 模型配置
 
-> 完整说明见 [LLM 配置指南](LLM_CONFIG_GUIDE.md)（三层配置、渠道模式、Vision、Agent、排错）。
+> 完整说明见 [LLM 配置指南](LLM_CONFIG_GUIDE.md)（三层配置、渠道模式、Vision、Agent、排错）；常用服务商预设与 `.env` 模板见 [LLM 服务商配置速查](llm-providers.md)。
 
 | 变量名 | 说明 | 默认值 | 必填 |
 |--------|------|--------|:----:|
