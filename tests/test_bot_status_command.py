@@ -197,15 +197,30 @@ def test_status_command_treats_direct_env_provider_model_as_ready():
     assert "系统就绪" in text
 
 
-def test_status_command_supports_legacy_key_compatibility_without_explicit_litellm_model(monkeypatch):
+def test_status_command_supports_legacy_key_compatibility_without_explicit_litellm_model(monkeypatch, tmp_path):
     # When only legacy OpenAI-compatible keys are configured and LITELLM_MODEL is unset,
     # runtime still infers a usable model path. /status should reflect this compatibility
     # path instead of reporting hard failure.
+    env_file = tmp_path / ".env"
+    env_file.write_text("", encoding="utf-8")
+    monkeypatch.setenv("ENV_FILE", str(env_file))
+    for key in (
+        "GEMINI_API_KEYS",
+        "GEMINI_API_KEY",
+        "ANTHROPIC_API_KEYS",
+        "ANTHROPIC_API_KEY",
+        "DEEPSEEK_API_KEYS",
+        "DEEPSEEK_API_KEY",
+        "OPENAI_API_KEYS",
+        "AIHUBMIX_KEY",
+        "LITELLM_MODEL",
+        "LLM_CHANNELS",
+        "LITELLM_CONFIG",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
     monkeypatch.setenv("OPENAI_API_KEY", "sk-legacy-test-key")
     monkeypatch.setenv("OPENAI_MODEL", "gpt-4o-mini")
-    monkeypatch.delenv("LITELLM_MODEL", raising=False)
-    monkeypatch.delenv("LLM_CHANNELS", raising=False)
-    monkeypatch.delenv("LITELLM_CONFIG", raising=False)
 
     Config.reset_instance()
     try:
