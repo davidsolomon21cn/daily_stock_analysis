@@ -39,6 +39,18 @@ const CHANNEL_PRESETS: Record<string, ChannelPreset> = {
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     placeholder: 'glm-4-flash,glm-4-plus',
   },
+  minimax: {
+    label: 'MiniMax 官方',
+    protocol: 'openai',
+    baseUrl: 'https://api.minimax.io/v1',
+    placeholder: 'minimax/MiniMax-M2.7,minimax/MiniMax-M2.5',
+  },
+  volcengine: {
+    label: '火山方舟（Volcengine Ark）',
+    protocol: 'openai',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    placeholder: 'doubao-1-5-pro-256k-250115,doubao-1-5-lite-32k-250115',
+  },
   moonshot: {
     label: 'Moonshot（月之暗面）',
     protocol: 'openai',

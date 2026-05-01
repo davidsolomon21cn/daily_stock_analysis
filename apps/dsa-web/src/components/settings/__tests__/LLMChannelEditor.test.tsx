@@ -54,6 +54,31 @@ describe('LLMChannelEditor', () => {
     expect(input).toHaveAttribute('type', 'text');
   });
 
+  it('offers MiniMax and Volcengine provider presets', () => {
+    render(
+      <LLMChannelEditor
+        items={[]}
+        configVersion="v1"
+        maskToken="******"
+        onSaved={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('option', { name: 'MiniMax 官方' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '火山方舟（Volcengine Ark）' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('combobox'), {
+      target: { value: 'minimax' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '+ 添加渠道' }));
+
+    expect(screen.getByRole('button', { name: /MiniMax 官方/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.minimax.io/v1');
+    expect(screen.getByLabelText('模型（逗号分隔）')).toHaveValue(
+      'minimax/MiniMax-M2.7,minimax/MiniMax-M2.5',
+    );
+  });
+
   it('hides LiteLLM wording when advanced YAML routing is enabled', () => {
     render(
       <LLMChannelEditor

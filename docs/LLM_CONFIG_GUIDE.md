@@ -70,6 +70,7 @@ LITELLM_MODEL=ollama/qwen3:8b
 **网页端可以直接配：** 你可以启动程序后，在 **Web UI 的“系统设置 -> AI 模型 -> AI 模型接入”** 中非常直观地进行可视化配置！
 
 > **新版编辑体验补充**：对于 DeepSeek、阿里百炼（DashScope）以及其他兼容 OpenAI `/v1/models` 的渠道，设置页现在支持直接点击“获取模型”，从 `{base_url}/models` 拉取可用模型并多选；底层仍会保存为原来的 `LLM_{CHANNEL}_MODELS=model1,model2` 逗号格式。若渠道不支持该接口、鉴权失败或暂时不可达，仍可继续手动填写模型列表，不影响保存。
+> 快速渠道预设已覆盖 OpenAI、DeepSeek、Gemini、Claude、Kimi / Moonshot、Qwen / DashScope、智谱、MiniMax、硅基流动、OpenRouter、火山方舟和 Ollama 等常见服务商；预设只负责填充表单默认值，实际生效仍以保存后的 `.env` 为准。
 
 ### 首次启动配置状态
 
