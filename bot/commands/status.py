@@ -58,7 +58,7 @@ class StatusCommand(BotCommand):
     
     def _collect_status(self, config) -> dict:
         """收集系统状态信息"""
-        from src.config import _uses_direct_env_provider
+        from src.config import _uses_direct_env_provider, get_configured_llm_models
 
         status = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -91,7 +91,16 @@ class StatusCommand(BotCommand):
             "DeepSeek": bool(getattr(config, "deepseek_api_keys", [])),
         }
         has_direct_env_model = bool(llm_model) and _uses_direct_env_provider(llm_model)
-        status["ai_available"] = bool(llm_model_list or has_direct_env_model)
+        available_router_model_set = set(get_configured_llm_models(llm_model_list))
+        primary_model_reachable = not (
+            available_router_model_set
+            and llm_model
+            and not _uses_direct_env_provider(llm_model)
+            and llm_model not in available_router_model_set
+        )
+        status["ai_available"] = bool(
+            has_direct_env_model or (llm_model_list and primary_model_reachable)
+        )
         
         # 搜索服务状态
         status["search_bocha"] = len(config.bocha_api_keys) > 0

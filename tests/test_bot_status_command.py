@@ -74,6 +74,37 @@ def test_status_command_does_not_treat_managed_model_name_as_ready():
     assert "AI 服务未配置" in text
 
 
+def test_status_command_requires_primary_model_in_configured_router_models():
+    config = Config(
+        stock_list=["600519"],
+        litellm_model="openai/gpt-4o-mini",
+        llm_channels=[
+            {
+                "name": "deepseek",
+                "models": ["deepseek/deepseek-v4-flash"],
+            }
+        ],
+        llm_models_source="llm_channels",
+        llm_model_list=[
+            {
+                "model_name": "deepseek/deepseek-v4-flash",
+                "litellm_params": {
+                    "model": "deepseek/deepseek-v4-flash",
+                    "api_key": "sk-test",
+                },
+            }
+        ],
+    )
+    command = StatusCommand()
+
+    status = command._collect_status(config)
+    text = command._format_status(status, "telegram")
+
+    assert status["ai_available"] is False
+    assert "AI 服务未配置" in text
+    assert "系统就绪" not in text
+
+
 def test_status_command_does_not_treat_invalid_yaml_path_as_active():
     config = Config(
         stock_list=["600519"],
