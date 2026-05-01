@@ -73,6 +73,9 @@ class CustomWebhookSender:
                         if self._post_custom_webhook(url, templated_payload, timeout=30):
                             logger.info(f"自定义 Webhook {i+1}（钉钉模板）推送成功")
                             success_count += 1
+                        elif self._send_dingtalk_chunked(url, content, max_bytes=20000):
+                            logger.info(f"自定义 Webhook {i+1}（钉钉模板失败，回退分批）推送成功")
+                            success_count += 1
                         else:
                             logger.error(f"自定义 Webhook {i+1}（钉钉模板）推送失败")
                     elif self._send_dingtalk_chunked(url, content, max_bytes=20000):
