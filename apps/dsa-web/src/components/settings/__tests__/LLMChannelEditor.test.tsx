@@ -67,7 +67,9 @@ describe('LLMChannelEditor', () => {
     expect(screen.getByRole('option', { name: 'MiniMax 官方' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: '火山方舟（Volcengine Ark）' })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole('combobox'), {
+    const presetSelect = screen.getAllByRole('combobox')[0];
+
+    fireEvent.change(presetSelect, {
       target: { value: 'minimax' },
     });
     fireEvent.click(screen.getByRole('button', { name: '+ 添加渠道' }));
@@ -76,6 +78,17 @@ describe('LLMChannelEditor', () => {
     expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.minimax.io/v1');
     expect(screen.getByLabelText('模型（逗号分隔）')).toHaveValue(
       'minimax/MiniMax-M2.7,minimax/MiniMax-M2.5',
+    );
+
+    fireEvent.change(presetSelect, {
+      target: { value: 'volcengine' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '+ 添加渠道' }));
+
+    expect(screen.getByRole('button', { name: /火山方舟（Volcengine Ark）/i })).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Base URL')[1]).toHaveValue('https://ark.cn-beijing.volces.com/api/v3');
+    expect(screen.getAllByLabelText('模型（逗号分隔）')[1]).toHaveValue(
+      'doubao-1-5-pro-256k-250115,doubao-1-5-lite-32k-250115',
     );
   });
 
