@@ -864,6 +864,37 @@ Sector text.
         assert snapshot["score"] < 40
         assert any("亏钱效应" in reason for reason in snapshot["reasons"])
 
+    def test_market_light_snapshot_uses_english_labels_and_reasons(self):
+        from src.market_analyzer import MarketIndex, MarketOverview
+
+        ma = self._make_market_analyzer_with_mock_generate_text(return_value="review")
+        ma.config.report_language = "en"
+        overview = MarketOverview(
+            date="2026-03-06",
+            indices=[
+                MarketIndex(code="000001", name="SSE Composite", current=3200, change_pct=-1.8),
+                MarketIndex(code="399001", name="SZSE Component", current=9800, change_pct=-2.4),
+            ],
+            up_count=900,
+            down_count=4100,
+            limit_up_count=10,
+            limit_down_count=80,
+            total_amount=9800.0,
+        )
+
+        snapshot = ma.build_market_light_snapshot(overview)
+
+        assert snapshot["status"] == "red"
+        assert snapshot["label"] == "defensive"
+        assert snapshot["guidance"] == (
+            "Risk is elevated; prioritize drawdown control and avoid chasing weak rebounds."
+        )
+        assert snapshot["reasons"][0].startswith("market temperature ")
+        assert any(
+            reason.startswith("advancers ratio ") and "downside pressure dominates" in reason
+            for reason in snapshot["reasons"]
+        )
+
     def test_us_english_indices_do_not_label_turnover_as_cny(self):
         from src.core.market_profile import US_PROFILE
         from src.core.market_strategy import get_market_strategy_blueprint

@@ -561,7 +561,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             )
         light = self.build_market_light_snapshot(overview)
         score, label = light["score"], light["temperature_label"]
-        participation = overview.up_count + overview.down_count + overview.flat_count
+        participation = overview.up_count + overview.down_count
         up_ratio = overview.up_count / participation if participation else 0.0
         limit_spread = overview.limit_up_count - overview.limit_down_count
         lines = [
@@ -573,7 +573,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             "",
             "| 指标 | 数值 | 观察 |",
             "|------|------|------|",
-            f"| 上涨/下跌/平盘 | {overview.up_count} / {overview.down_count} / {overview.flat_count} | 上涨占比 {up_ratio:.1%} |",
+            f"| 上涨/下跌/平盘 | {overview.up_count} / {overview.down_count} / {overview.flat_count} | 上涨占比(不含平盘) {up_ratio:.1%} |",
             f"| 涨停/跌停 | {overview.limit_up_count} / {overview.limit_down_count} | 涨跌停差 {limit_spread:+d} |",
             f"| 两市成交额 | {overview.total_amount:.0f} 亿 | {self._describe_turnover(overview.total_amount)} |",
         ]
