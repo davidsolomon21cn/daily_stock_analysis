@@ -186,7 +186,6 @@ class EventMonitor:
     def __init__(self):
         self.rules: List[AlertRule] = []
         self._callbacks: List[Callable[[TriggeredAlert], None]] = []
-        self._fetcher_manager: Optional[Any] = None
 
     def add_alert(self, rule: AlertRule) -> None:
         """Register a new alert rule."""
@@ -261,15 +260,10 @@ class EventMonitor:
         # implemented as hooks for future extension
         return None
 
-    def _get_fetcher_manager(self) -> Any:
-        if self._fetcher_manager is None:
-            from data_provider import DataFetcherManager
-
-            self._fetcher_manager = DataFetcherManager()
-        return self._fetcher_manager
-
     def _fetch_realtime_quote(self, stock_code: str) -> Any:
-        return self._get_fetcher_manager().get_realtime_quote(stock_code)
+        from data_provider import DataFetcherManager
+
+        return DataFetcherManager().get_realtime_quote(stock_code)
 
     async def _get_realtime_quote(self, stock_code: str) -> Any:
         return await asyncio.to_thread(self._fetch_realtime_quote, stock_code)
