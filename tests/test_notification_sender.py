@@ -8,6 +8,7 @@ Does not duplicate test_notification.py which tests NotificationService.send() f
 import base64
 import hashlib
 import hmac
+import json
 import os
 import sys
 import unittest
@@ -375,6 +376,39 @@ class TestCustomWebhookSender(unittest.TestCase):
         cfg = _config(custom_webhook_urls=["https://example.com/webhook"])
         sender = CustomWebhookSender(cfg)
         result = sender.send_to_custom("hello")
+        self.assertTrue(result)
+        body = mock_post.call_args[1]["data"].decode("utf-8")
+        self.assertIn("hello", body)
+
+    @mock.patch("src.notification_sender.custom_webhook_sender.requests.post")
+    def test_send_uses_custom_body_template(self, mock_post):
+        mock_post.return_value = _response(200)
+        cfg = _config(
+            custom_webhook_urls=["https://example.com/webhook"],
+            custom_webhook_body_template='{"msg_type":"text","content":$content_json}',
+        )
+        sender = CustomWebhookSender(cfg)
+
+        result = sender.send_to_custom('hello "world"')
+
+        self.assertTrue(result)
+        body = mock_post.call_args[1]["data"].decode("utf-8")
+        self.assertEqual(
+            json.loads(body),
+            {"msg_type": "text", "content": 'hello "world"'},
+        )
+
+    @mock.patch("src.notification_sender.custom_webhook_sender.requests.post")
+    def test_invalid_custom_body_template_falls_back(self, mock_post):
+        mock_post.return_value = _response(200)
+        cfg = _config(
+            custom_webhook_urls=["https://example.com/webhook"],
+            custom_webhook_body_template='{"content": $content',
+        )
+        sender = CustomWebhookSender(cfg)
+
+        result = sender.send_to_custom("hello")
+
         self.assertTrue(result)
         body = mock_post.call_args[1]["data"].decode("utf-8")
         self.assertIn("hello", body)
