@@ -68,7 +68,14 @@ class CustomWebhookSender:
                 
                 # 钉钉机器人对 body 有字节上限（约 20000 bytes），超长需要分批发送
                 if self._is_dingtalk_webhook(url):
-                    if self._send_dingtalk_chunked(url, content, max_bytes=20000):
+                    templated_payload = self._build_custom_webhook_template_payload(content)
+                    if templated_payload is not None:
+                        if self._post_custom_webhook(url, templated_payload, timeout=30):
+                            logger.info(f"自定义 Webhook {i+1}（钉钉模板）推送成功")
+                            success_count += 1
+                        else:
+                            logger.error(f"自定义 Webhook {i+1}（钉钉模板）推送失败")
+                    elif self._send_dingtalk_chunked(url, content, max_bytes=20000):
                         logger.info(f"自定义 Webhook {i+1}（钉钉）推送成功")
                         success_count += 1
                     else:

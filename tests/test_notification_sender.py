@@ -399,6 +399,25 @@ class TestCustomWebhookSender(unittest.TestCase):
         )
 
     @mock.patch("src.notification_sender.custom_webhook_sender.requests.post")
+    def test_dingtalk_send_uses_custom_body_template(self, mock_post):
+        mock_post.return_value = _response(200)
+        cfg = _config(
+            custom_webhook_urls=["https://oapi.dingtalk.com/robot/send?access_token=token"],
+            custom_webhook_body_template='{"msgtype":"text","text":{"content":$content_json}}',
+        )
+        sender = CustomWebhookSender(cfg)
+
+        result = sender.send_to_custom("hello dingtalk")
+
+        self.assertTrue(result)
+        mock_post.assert_called_once()
+        body = mock_post.call_args[1]["data"].decode("utf-8")
+        self.assertEqual(
+            json.loads(body),
+            {"msgtype": "text", "text": {"content": "hello dingtalk"}},
+        )
+
+    @mock.patch("src.notification_sender.custom_webhook_sender.requests.post")
     def test_invalid_custom_body_template_falls_back(self, mock_post):
         mock_post.return_value = _response(200)
         cfg = _config(
