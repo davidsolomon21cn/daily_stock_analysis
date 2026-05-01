@@ -67,8 +67,29 @@ class StatusCommand(BotCommand):
         }
         
         # AI 配置状态
-        status["ai_gemini"] = bool(config.gemini_api_key)
-        status["ai_openai"] = bool(config.openai_api_key)
+        llm_channels = getattr(config, "llm_channels", []) or []
+        llm_model = (getattr(config, "litellm_model", "") or "").strip()
+        agent_model = (getattr(config, "agent_litellm_model", "") or "").strip()
+        status["ai_primary_model"] = llm_model
+        status["ai_agent_model"] = agent_model or ("继承主模型" if llm_model else "")
+        status["ai_channels"] = [
+            str(channel.get("name") or "").strip()
+            for channel in llm_channels
+            if str(channel.get("name") or "").strip()
+        ]
+        status["ai_yaml"] = bool(getattr(config, "litellm_config_path", None))
+        status["ai_legacy_keys"] = {
+            "Gemini": bool(getattr(config, "gemini_api_keys", [])),
+            "OpenAI": bool(getattr(config, "openai_api_keys", [])),
+            "Anthropic": bool(getattr(config, "anthropic_api_keys", [])),
+            "DeepSeek": bool(getattr(config, "deepseek_api_keys", [])),
+        }
+        status["ai_available"] = bool(
+            llm_model
+            or status["ai_channels"]
+            or status["ai_yaml"]
+            or any(status["ai_legacy_keys"].values())
+        )
         
         # 搜索服务状态
         status["search_bocha"] = len(config.bocha_api_keys) > 0
@@ -83,6 +104,29 @@ class StatusCommand(BotCommand):
         status["notify_feishu"] = bool(config.feishu_webhook_url)
         status["notify_telegram"] = bool(config.telegram_bot_token and config.telegram_chat_id)
         status["notify_email"] = bool(config.email_sender and config.email_password)
+        status["notify_custom"] = bool(getattr(config, "custom_webhook_urls", []))
+        status["notify_discord"] = bool(
+            getattr(config, "discord_webhook_url", None)
+            or (
+                getattr(config, "discord_bot_token", None)
+                and getattr(config, "discord_main_channel_id", None)
+            )
+        )
+        status["notify_slack"] = bool(
+            getattr(config, "slack_webhook_url", None)
+            or (
+                getattr(config, "slack_bot_token", None)
+                and getattr(config, "slack_channel_id", None)
+            )
+        )
+        status["notify_push"] = bool(
+            getattr(config, "pushplus_token", None)
+            or (
+                getattr(config, "pushover_user_key", None)
+                and getattr(config, "pushover_api_token", None)
+            )
+            or getattr(config, "serverchan3_sendkey", None)
+        )
         
         return status
     
@@ -114,8 +158,15 @@ class StatusCommand(BotCommand):
         lines.extend([
             "",
             "**🤖 AI 分析服务**",
-            f"• Gemini API: {icon(status['ai_gemini'])}",
-            f"• OpenAI API: {icon(status['ai_openai'])}",
+            f"• 主模型: {status['ai_primary_model'] or '未配置'}",
+            f"• Agent 模型: {status['ai_agent_model'] or '未配置'}",
+            f"• LLM 渠道: {', '.join(status['ai_channels']) if status['ai_channels'] else '未配置'}",
+            f"• LiteLLM YAML: {icon(status['ai_yaml'])}",
+            "• Legacy Key: "
+            + ", ".join(
+                f"{name}{icon(enabled)}"
+                for name, enabled in status["ai_legacy_keys"].items()
+            ),
             "",
             "**🔍 搜索服务**",
             f"• Bocha: {icon(status['search_bocha'])}",
@@ -130,11 +181,14 @@ class StatusCommand(BotCommand):
             f"• 飞书: {icon(status['notify_feishu'])}",
             f"• Telegram: {icon(status['notify_telegram'])}",
             f"• 邮件: {icon(status['notify_email'])}",
+            f"• 自定义 Webhook: {icon(status['notify_custom'])}",
+            f"• Discord: {icon(status['notify_discord'])}",
+            f"• Slack: {icon(status['notify_slack'])}",
+            f"• PushPlus/Pushover/Server酱: {icon(status['notify_push'])}",
         ])
         
         # AI 服务总体状态
-        ai_available = status['ai_gemini'] or status['ai_openai']
-        if ai_available:
+        if status["ai_available"]:
             lines.extend([
                 "",
                 "---",
@@ -145,7 +199,7 @@ class StatusCommand(BotCommand):
                 "",
                 "---",
                 "⚠️ **AI 服务未配置，分析功能不可用**",
-                "请配置 Gemini 或 OpenAI API Key",
+                "请配置 LITELLM_MODEL、LLM_CHANNELS、LITELLM_CONFIG 或任一 provider API Key",
             ])
         
         return "\n".join(lines)
