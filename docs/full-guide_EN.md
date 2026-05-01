@@ -1011,6 +1011,10 @@ A: Check if Actions is enabled, and if cron expression is correct (note it's UTC
 
 When `AGENT_EVENT_MONITOR_ENABLED=true`, schedule mode polls the rules in `AGENT_EVENT_ALERT_RULES_JSON` every `AGENT_EVENT_MONITOR_INTERVAL_MINUTES` minutes and sends triggered alerts through the existing notification channels. The runtime currently supports three rule types:
 
+> Compatibility and rollback note: this PR only adds/validates Event Monitor rule fields (including `price_change_percent`) and does not change external model/provider API semantics such as model names, providers, Base URL, LiteLLM, `OPENAI_*`, `DEEPSEEK_*`, or `GEMINI_*` configuration.
+> Rollback is explicit: clear or disable `AGENT_EVENT_MONITOR_ENABLED`/related rule config to restore previous behavior.
+> Evidence is in-repo: `src/agent/events.py` (runtime parsing/validation), `src/services/system_config_service.py` (config validation), `src/core/config_registry.py` (metadata), and regression tests in `tests/test_multi_agent.py` + `tests/test_system_config_service.py`.
+
 | `alert_type` | Direction | Threshold | Description |
 | --- | --- | --- | --- |
 | `price_cross` | `above` / `below` | `price` | Current price crosses a fixed threshold |
