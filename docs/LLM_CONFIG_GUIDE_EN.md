@@ -84,6 +84,8 @@ The backend exposes a read-only status endpoint at `GET /api/v1/system/config/se
 - Rollback stays minimal: restore the previous channel model list and re-select the runtime models, or restore the previous `LLM_*`, `LITELLM_MODEL`, `AGENT_LITELLM_MODEL`, `VISION_MODEL`, and `LLM_TEMPERATURE` values from your desktop export / manual `.env` backup. No extra migration script is required.
 - The current dependency window for this flow in the repository is `litellm>=1.80.10,<1.82.7` (see `requirements.txt`). Regression coverage for it lives in `tests/test_system_config_service.py`, `tests/test_system_config_api.py`, and `apps/dsa-web/src/components/settings/__tests__/LLMChannelEditor.test.tsx`.
 
+> **External provider model examples notice**: `cohere/*`, `google/*`, and `xai/*` entries (for example `cohere/grok-beta`, `google/gemini-2.5-flash`, and `xai/grok-beta`) are included here only to describe current runtime retention behavior and are **not** a global availability guarantee. Check the provider's official model/API docs and validate against the repository dependency window `litellm>=1.80.10,<1.82.7` before production use.
+
 ### Rollback & compatibility evidence
 
 - Scope and cleanup behavior under `litellm>=1.80.10,<1.82.7`: only runtime references (`LITELLM_MODEL`, `AGENT_LITELLM_MODEL`, `VISION_MODEL`, `LITELLM_FALLBACK_MODELS`) are sanitized during save; non-channel direct providers such as `cohere/*`, `google/*`, and `xai/*` are preserved.
@@ -102,6 +104,13 @@ The backend exposes a read-only status endpoint at `GET /api/v1/system/config/se
 - Moonshot / Kimi official compatibility docs: <https://platform.moonshot.ai/docs/guide/compatibility>
 - Anthropic official Messages API: <https://docs.anthropic.com/en/api/messages>
 - Gemini official OpenAI compatibility docs: <https://ai.google.dev/gemini-api/docs/openai>
+- Cohere official: <https://docs.cohere.com/>
+- Cohere API reference: <https://docs.cohere.com/reference/>
+- Cohere LiteLLM provider page: <https://docs.litellm.ai/docs/providers/cohere>
+- Google Gemini API and model list: <https://ai.google.dev/gemini-api/docs/openai>, <https://ai.google.dev/gemini-api/docs/models>
+- Google LiteLLM provider page: <https://docs.litellm.ai/docs/providers/gemini>
+- xAI official: <https://docs.x.ai/docs>
+- xAI LiteLLM provider page: <https://docs.litellm.ai/docs/providers/xai>
 - Ollama API docs: <https://github.com/ollama/ollama/blob/main/docs/api.md>
 
 If you prefer modifying files, configuring this in the `.env` file is also very smooth. It allows you to manage multiple platforms simultaneously. The rules are:

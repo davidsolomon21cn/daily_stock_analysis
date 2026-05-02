@@ -84,6 +84,8 @@ LITELLM_MODEL=ollama/qwen3:8b
 - 回退方式也保持最小：把对应渠道模型列表改回去后重新选择主模型 / fallback，或直接用桌面端导出备份 / 手动 `.env` 还原之前的 `LLM_*`、`LITELLM_MODEL`、`AGENT_LITELLM_MODEL`、`VISION_MODEL`、`LLM_TEMPERATURE` 即可，不需要额外跑迁移脚本。
 - 当前仓库对此链路的依赖窗口是 `litellm>=1.80.10,<1.82.7`（见 `requirements.txt`）；回归覆盖包括 `tests/test_system_config_service.py`、`tests/test_system_config_api.py` 和 `apps/dsa-web/src/components/settings/__tests__/LLMChannelEditor.test.tsx`。
 
+> **外部 provider 示例模型说明**：`cohere/*`、`google/*`、`xai/*` 及 `cohere/grok-beta`、`google/gemini-2.5-flash`、`xai/grok-beta` 等示例，仅用于说明当前保存清理语义，**不代表该窗口内的逐型号可用性保证**。实际可用性请以对应官方模型文档为准，并结合仓库依赖窗口 `litellm>=1.80.10,<1.82.7` 复核。
+
 ### 回退与兼容性证据
 
 - 兼容窗口与静默清理范围：在 `litellm>=1.80.10,<1.82.7` 时，保存仅清理失效的 runtime 模型引用（`LITELLM_MODEL`、`AGENT_LITELLM_MODEL`、`VISION_MODEL`、`LITELLM_FALLBACK_MODELS`），`cohere/*`、`google/*`、`xai/*` 等非渠道直连模型会被保留。
@@ -102,6 +104,13 @@ LITELLM_MODEL=ollama/qwen3:8b
 - Moonshot / Kimi 官方：<https://platform.moonshot.ai/docs/guide/compatibility>
 - Anthropic 官方：<https://docs.anthropic.com/en/api/messages>
 - Gemini 官方：<https://ai.google.dev/gemini-api/docs/openai>
+- Cohere 官方：<https://docs.cohere.com/>
+- Cohere API 参考：<https://docs.cohere.com/reference/>
+- Cohere LiteLLM Provider：<https://docs.litellm.ai/docs/providers/cohere>
+- Google Gemini API 与模型：<https://ai.google.dev/gemini-api/docs/openai>、<https://ai.google.dev/gemini-api/docs/models>
+- Google LiteLLM Provider：<https://docs.litellm.ai/docs/providers/gemini>
+- xAI 官方：<https://docs.x.ai/docs>
+- xAI LiteLLM Provider：<https://docs.litellm.ai/docs/providers/xai>
 - Ollama 官方：<https://github.com/ollama/ollama/blob/main/docs/api.md>
 
 如果不方便用网页版，在 `.env` 文件中配置也非常丝滑，它能让你同时管理多个第三方平台。规则如下：
