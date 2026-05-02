@@ -71,21 +71,38 @@ LITELLM_MODEL=ollama/qwen3:8b
 
 > **New editor behavior**: For DeepSeek, DashScope, and other OpenAI-compatible providers that expose `/v1/models`, the settings page can now fetch models directly from `{base_url}/models` and let you select multiple entries visually. The underlying storage format is still the existing comma-separated `LLM_{CHANNEL}_MODELS=model1,model2` value. If a provider does not support `/models`, authentication fails, or the endpoint is temporarily unavailable, you can still type the model list manually and save normally.
 
-### Runtime field cleanup before saving (Web settings)
+### First-run Setup Status
 
-- Before saving, the page validates `LITELLM_MODEL`, `AGENT_LITELLM_MODEL`, `VISION_MODEL`, and `LITELLM_FALLBACK_MODELS` against currently discovered models from enabled channels; values not found are cleared automatically so the save operation can still succeed.
-- Direct provider models such as `cohere/xxx`, `google/xxx`, or `xai/xxx` are preserved even when they are not present in the channel model list, because they are treated as valid external provider runtime entries.
-- Compatibility basis: this is implemented by keeping non-managed provider-prefix runtime values (`cohere`, `google`, `xai`) as external entries while cleaning only values that are not available in enabled channels; the behavior is aligned with LiteLLM-compatible provider-prefix passthrough in the current runtime schema.
-- Backend consistency basis: runtime validation in `SystemConfigService._validate_llm_runtime_selection` (`src/services/system_config_service.py`) relies on `_uses_direct_env_provider` (`src/config.py`).
-  Only `gemini`, `vertex_ai`, `anthropic`, `openai`, and `deepseek` are treated as managed key-backed providers, while `cohere`, `google`, and `xai` are handled as direct provider entries and remain valid as runtime selections.
-- If you see a runtime field cleared, add the corresponding model back to the channel model list (or switch to another available model) and save again; the success message will indicate which runtime fields were auto-cleaned.
-- Regression evidence (backend): `SystemConfigService` already has coverage for direct provider and fallback-source semantics, including
-  - `tests/test_system_config_service.py::SystemConfigServiceTestCase::test_validate_accepts_minimax_model_as_direct_env_provider`
-  - `tests/test_system_config_service.py::SystemConfigServiceTestCase::test_validate_accepts_cohere_model_as_direct_env_provider`
-  - `tests/test_system_config_service.py::SystemConfigServiceTestCase::test_validate_accepts_google_model_as_direct_env_provider`
-  - `tests/test_system_config_service.py::SystemConfigServiceTestCase::test_validate_accepts_xai_model_as_direct_env_provider`
-  - `tests/test_system_config_service.py::SystemConfigServiceTestCase::test_validate_reports_allows_primary_model_when_all_channels_disabled_but_legacy_key_exists`
+The backend exposes a read-only status endpoint at `GET /api/v1/system/config/setup/status`. It reports whether the minimum first-run pieces are present: primary LLM, Agent model inheritance/configuration, stock list, optional notification channel, and local storage. The endpoint only reads the saved `.env` plus the current process environment; it does not reload runtime config, write `.env`, test a real model, or create a database file. Frontend onboarding and later smoke-run flows can build on this endpoint incrementally.
+
+### Web channel editor: compatibility, migration, and rollback rules
+
+- The preset provider / Base URL / sample models are **form defaults only**. What gets persisted is still exactly what you submit in `LLM_{CHANNEL}_PROTOCOL`, `LLM_{CHANNEL}_BASE_URL`, `LLM_{CHANNEL}_MODELS`, and `LLM_{CHANNEL}_API_KEY(S)`; the editor does not silently rewrite them to a different provider name or URL.
+- "Discover models" only calls `{base_url}/models` for `OpenAI Compatible` / `DeepSeek` channels, and "Test connection" only sends one minimal chat completion request. The returned `stage / error_code / details / latency_ms` fields are for structured diagnostics only and are **never persisted** back into `.env`.
+- Saving channels only updates the keys submitted in that save operation; there is no whole-config silent migration when you switch channel settings. The one deliberate cleanup is runtime model references: if `LITELLM_MODEL`, `AGENT_LITELLM_MODEL`, `VISION_MODEL`, or `LITELLM_FALLBACK_MODELS` point to models that no longer exist in the currently enabled channels, the editor clears/removes those stale references before saving so runtime calls do not keep targeting invalid models. Direct-env providers such as `cohere/...`, `google/...`, and `xai/...` remain untouched.
+- Backend consistency basis: runtime validation in `SystemConfigService._validate_llm_runtime_selection` (`src/services/system_config_service.py`) relies on `_uses_direct_env_provider` (`src/config.py`). Only `gemini`, `vertex_ai`, `anthropic`, `openai`, and `deepseek` are treated as managed key-backed providers; `cohere`, `google`, and `xai` are not in that allowlist, so they remain valid direct provider runtime entries.
+- Rollback stays minimal: restore the previous channel model list and re-select the runtime models, or restore the previous `LLM_*`, `LITELLM_MODEL`, `AGENT_LITELLM_MODEL`, `VISION_MODEL`, and `LLM_TEMPERATURE` values from your desktop export / manual `.env` backup. No extra migration script is required.
+- The current dependency window for this flow in the repository is `litellm>=1.80.10,<1.82.7` (see `requirements.txt`). Regression coverage for it lives in `tests/test_system_config_service.py`, `tests/test_system_config_api.py`, and `apps/dsa-web/src/components/settings/__tests__/LLMChannelEditor.test.tsx`.
+
+### Rollback & compatibility evidence
+
+- Scope and cleanup behavior under `litellm>=1.80.10,<1.82.7`: only runtime references (`LITELLM_MODEL`, `AGENT_LITELLM_MODEL`, `VISION_MODEL`, `LITELLM_FALLBACK_MODELS`) are sanitized during save; non-channel direct providers such as `cohere/*`, `google/*`, and `xai/*` are preserved.
+- Rollback path: export desktop config, then restore the backup through `POST /api/v1/system/config/import`; or manually restore historical `.env` entries (`LITELLM_*`, `AGENT_LITELLM_MODEL`, `VISION_MODEL`, `LLM_TEMPERATURE`) and restart.
+- Rollback evidence: `tests/test_system_config_service.py::test_import_desktop_env_restores_runtime_models_after_cleanup` covers restore from exported desktop backup after runtime cleanup.
+- Direct-provider evidence: `tests/test_system_config_service.py::SystemConfigServiceTestCase::test_validate_accepts_minimax_model_as_direct_env_provider`, `test_validate_accepts_cohere_model_as_direct_env_provider`, `test_validate_accepts_google_model_as_direct_env_provider`, and `test_validate_accepts_xai_model_as_direct_env_provider` cover the preserved direct-provider behavior.
 - Frontend regression commands: `cd apps/dsa-web && npm run lint && npm run build && npm run test -- src/components/settings/__tests__/LLMChannelEditor.test.tsx`.
+- Recommended rollback sequence (including UI reload): export desktop backup, restore via `POST /api/v1/system/config/import`, then call `GET /api/v1/system/config` to refresh the settings page and verify `LITELLM_MODEL` / `AGENT_LITELLM_MODEL` / `VISION_MODEL` / `LLM_TEMPERATURE` before continuing.
+
+### Official references for provider presets / Base URLs / model naming
+
+- OpenAI-compatible routing in LiteLLM: <https://docs.litellm.ai/docs/providers/openai_compatible>
+- OpenAI official API docs: <https://platform.openai.com/docs/api-reference/chat>
+- DeepSeek official API docs: <https://api-docs.deepseek.com/>
+- DashScope OpenAI-compatible mode: <https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope>
+- Moonshot / Kimi official compatibility docs: <https://platform.moonshot.ai/docs/guide/compatibility>
+- Anthropic official Messages API: <https://docs.anthropic.com/en/api/messages>
+- Gemini official OpenAI compatibility docs: <https://ai.google.dev/gemini-api/docs/openai>
+- Ollama API docs: <https://github.com/ollama/ollama/blob/main/docs/api.md>
 
 If you prefer modifying files, configuring this in the `.env` file is also very smooth. It allows you to manage multiple platforms simultaneously. The rules are:
 
@@ -105,7 +122,7 @@ LLM_DEEPSEEK_MODELS=deepseek-v4-flash,deepseek-v4-pro
 # 3. Channel 2: Configure a common relay/proxy API
 LLM_AIHUBMIX_BASE_URL=https://api.aihubmix.com/v1
 LLM_AIHUBMIX_API_KEY=sk-2222222222222
-LLM_AIHUBMIX_MODELS=gpt-4o-mini,claude-3-5-sonnet
+LLM_AIHUBMIX_MODELS=gpt-5.5,claude-sonnet-4-6
 
 # 4. [Key Step] Specify the primary model and fallback list
 # Set your primary model:
@@ -113,7 +130,7 @@ LITELLM_MODEL=deepseek/deepseek-v4-flash
 # Optional: set an Agent-only primary model (empty = inherit the primary model)
 AGENT_LITELLM_MODEL=deepseek/deepseek-v4-pro
 # If the primary model crashes, try these fallbacks sequentially:
-LITELLM_FALLBACK_MODELS=openai/gpt-4o-mini,anthropic/claude-3-5-sonnet
+LITELLM_FALLBACK_MODELS=openai/gpt-5.4-mini,anthropic/claude-sonnet-4-6
 ```
 
 ### Example: Ollama Channel Mode (Local Models, No API Key)
@@ -208,9 +225,9 @@ Certain specific features in our system (like uploading a stock chart screenshot
 
 ```env
 # Specify your dedicated vision model name
-VISION_MODEL=gemini/gemini-2.5-flash
-# Make sure to provide its corresponding provider API KEY (e.g., GEMINI_API_KEY):
-# GEMINI_API_KEY=xxx
+VISION_MODEL=openai/gpt-5.5
+# Make sure to provide its corresponding provider API KEY (e.g., OPENAI_API_KEY):
+# OPENAI_API_KEY=xxx
 ```
 
 **Vision Fallback Mechanism:** To prevent unexpected failures, the system has a built-in fallback strategy. If the primary vision model fails, it will attempt to use alternative vision-capable provider keys in the following order:
@@ -232,7 +249,7 @@ Afraid you got the config wrong? Type the following commands in your terminal to
 
 | Weird Error You Got? | Likely Culprit | How to Fix It? |
 |----------------------|----------------|----------------|
-| **The UI says the primary model is not configured** | The system doesn't know which provider/model you want to use. | Add a clear instruction in `.env`: `LITELLM_MODEL=provider/your_model_name`. Example: `openai/gpt-4o-mini`. |
+| **The UI says the primary model is not configured** | The system doesn't know which provider/model you want to use. | Add a clear instruction in `.env`: `LITELLM_MODEL=provider/your_model_name`. Example: `openai/gpt-5.5`. |
 | **I added multiple provider Keys, why is only one working?** | You mixed the **Simple Mode** and **Channels Mode**! | Choose one path. For simple setups, delete anything starting with `LLM_CHANNELS`. To use multi-model fallbacks, migrate all your Keys into the `LLM_CHANNELS` setup. |
 | **Returns 400, 401, or Invalid API Key** | The API Key is wrong, copied incompletely, account lacks credits, or you mistyped the model name (extremely common). | 1. Ensure there are no spaces at the start/end of your Key.<br> 2. Ensure your Base URL ends with `/v1`.<br> 3. Check if you forgot the `openai/` prefix on the model name! |
 | **Kimi K2.6 returns `invalid temperature` (it may say only `1.0` or `0.6` is allowed)** | The model requires different fixed temperatures for thinking vs non-thinking mode, while older config or call paths may still pass `0.7`. | After this fix, default / thinking `kimi-k2.6` requests automatically use `temperature=1.0`; if you explicitly disable thinking in a LiteLLM YAML route, the request automatically uses `0.6` instead. Prefer `openai/kimi-k2.6` with your Moonshot or relay OpenAI-compatible Base URL and API key. Non-Kimi fallbacks still keep your configured `LLM_TEMPERATURE`. |
