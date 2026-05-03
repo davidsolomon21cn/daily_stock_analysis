@@ -49,7 +49,12 @@ def _extract_provider_templates() -> dict[str, str]:
 def _load_daily_analysis_env() -> dict[str, str]:
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     steps = workflow["jobs"]["analyze"]["steps"]
-    analyze_step = next(step for step in steps if step.get("name") == "执行股票分析")
+    analyze_step = next((step for step in steps if step.get("name") == "执行股票分析"), None)
+    available_step_names = [step.get("name", "<unnamed>") for step in steps]
+    assert analyze_step is not None, (
+        "Expected daily_analysis.yml job analyze to include a step named "
+        f"'执行股票分析'; available step names: {available_step_names}"
+    )
     return analyze_step["env"]
 
 
