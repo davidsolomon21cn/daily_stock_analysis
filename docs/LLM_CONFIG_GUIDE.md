@@ -84,7 +84,7 @@ LITELLM_MODEL=ollama/qwen3:8b
 - 回退方式也保持最小：把对应渠道模型列表改回去后重新选择主模型 / fallback，或直接用桌面端导出备份 / 手动 `.env` 还原之前的 `LLM_*`、`LITELLM_MODEL`、`AGENT_LITELLM_MODEL`、`VISION_MODEL`、`LLM_TEMPERATURE` 即可，不需要额外跑迁移脚本。
 - 当前仓库对此链路的依赖窗口是 `litellm>=1.80.10,<1.82.7`（见 `requirements.txt`）；回归覆盖包括 `tests/test_system_config_service.py`、`tests/test_system_config_api.py` 和 `apps/dsa-web/src/components/settings/__tests__/LLMChannelEditor.test.tsx`。
 
-> **外部 provider 示例模型说明**：`cohere/*`、`google/*`、`xai/*` 及 `cohere/grok-beta`、`google/gemini-2.5-flash`、`xai/grok-beta` 等示例，仅用于说明当前保存清理语义，**不代表该窗口内的逐型号可用性保证**。实际可用性请以对应官方模型文档为准，并结合仓库依赖窗口 `litellm>=1.80.10,<1.82.7` 复核。
+> **外部 provider 示例模型说明**：`cohere/*`、`google/*`、`xai/*` 等 provider 前缀值仅用于说明当前保存清理语义，**不代表该窗口内的逐型号可用性保证**。文档或测试中的具体模型名都是配置保留行为样例，不是生产推荐；实际可用性请以对应官方模型文档为准，并结合仓库依赖窗口 `litellm>=1.80.10,<1.82.7` 复核。
 
 ### 回退与兼容性证据
 

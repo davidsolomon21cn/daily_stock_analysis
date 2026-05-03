@@ -84,7 +84,7 @@ The backend exposes a read-only status endpoint at `GET /api/v1/system/config/se
 - Rollback stays minimal: restore the previous channel model list and re-select the runtime models, or restore the previous `LLM_*`, `LITELLM_MODEL`, `AGENT_LITELLM_MODEL`, `VISION_MODEL`, and `LLM_TEMPERATURE` values from your desktop export / manual `.env` backup. No extra migration script is required.
 - The current dependency window for this flow in the repository is `litellm>=1.80.10,<1.82.7` (see `requirements.txt`). Regression coverage for it lives in `tests/test_system_config_service.py`, `tests/test_system_config_api.py`, and `apps/dsa-web/src/components/settings/__tests__/LLMChannelEditor.test.tsx`.
 
-> **External provider model examples notice**: `cohere/*`, `google/*`, and `xai/*` entries (for example `cohere/grok-beta`, `google/gemini-2.5-flash`, and `xai/grok-beta`) are included here only to describe current runtime retention behavior and are **not** a global availability guarantee. Check the provider's official model/API docs and validate against the repository dependency window `litellm>=1.80.10,<1.82.7` before production use.
+> **External provider model examples notice**: `cohere/*`, `google/*`, and `xai/*` provider-prefixed values are included here only to describe current runtime retention behavior and are **not** a global availability guarantee. Specific model names in docs or tests are configuration-retention examples, not production recommendations. Check the provider's official model/API docs and validate against the repository dependency window `litellm>=1.80.10,<1.82.7` before production use.
 
 ### Rollback & compatibility evidence
 
