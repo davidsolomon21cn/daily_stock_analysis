@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
-- [测试] 补充 AI 配置页运行时模型清理回归覆盖：恢复渠道模型时保留 fallback、编辑模型列表期间不静默清空运行时选择，并覆盖 `cohere/*`、`google/*`、`xai/*` 直连 provider 保留语义。
+- [测试] 补充 AI 配置页运行时模型清理回归覆盖：恢复渠道模型时保留 fallback、编辑模型列表期间不静默清空运行时选择，渠道无可用模型时清理失效运行时值，并覆盖 legacy key 与 `cohere/*`、`google/*`、`xai/*` 直连 provider 保留语义。
 - [新功能] 自定义 Webhook 支持 `CUSTOM_WEBHOOK_BODY_TEMPLATE` JSON body 模板，便于适配 AstrBot、NapCat 和自建推送服务。
 - [新功能] 大盘复盘结构化区块新增大盘红绿灯结论，基于盘面温度输出 green/yellow/red、核心原因和操作建议。
 - [修复] 统一持仓快照输出现价/市值/浮盈亏/收益率与价格元信息，并为 LLM 渠道测试补充结构化诊断与设置页排障提示。

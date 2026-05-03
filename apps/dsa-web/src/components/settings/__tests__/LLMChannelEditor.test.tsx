@@ -239,6 +239,109 @@ describe('LLMChannelEditor', () => {
     );
   });
 
+  it('sanitizes stale runtime models when enabled channels have no available models', async () => {
+    update.mockResolvedValue({
+      success: true,
+      configVersion: 'v2',
+      appliedCount: 1,
+      skippedMaskedCount: 0,
+      reloadTriggered: true,
+      updatedKeys: ['LLM_DEEPSEEK_BASE_URL', 'LITELLM_MODEL', 'AGENT_LITELLM_MODEL', 'LITELLM_FALLBACK_MODELS', 'VISION_MODEL'],
+      warnings: [],
+    });
+
+    render(
+      <LLMChannelEditor
+        items={[
+          { key: 'LLM_CHANNELS', value: 'deepseek' },
+          { key: 'LLM_DEEPSEEK_PROTOCOL', value: 'deepseek' },
+          { key: 'LLM_DEEPSEEK_BASE_URL', value: 'https://api.deepseek.com' },
+          { key: 'LLM_DEEPSEEK_ENABLED', value: 'false' },
+          { key: 'LLM_DEEPSEEK_API_KEY', value: 'sk-test' },
+          { key: 'LLM_DEEPSEEK_MODELS', value: 'deepseek-chat,deepseek-v4-pro' },
+          { key: 'LITELLM_MODEL', value: 'deepseek/deepseek-chat' },
+          { key: 'AGENT_LITELLM_MODEL', value: 'deepseek/deepseek-chat' },
+          { key: 'LITELLM_FALLBACK_MODELS', value: 'deepseek/deepseek-v4-pro' },
+          { key: 'VISION_MODEL', value: 'deepseek/deepseek-chat' },
+        ]}
+        configVersion="v1"
+        maskToken="******"
+        onSaved={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /DeepSeek 官方/i }));
+    fireEvent.change(screen.getByLabelText('Base URL'), {
+      target: { value: 'https://api.deepseek.com/v1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
+
+    await waitFor(() => {
+      expect(update).toHaveBeenCalled();
+    });
+
+    const updatePayload = update.mock.calls[0][0];
+    expect(updatePayload.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'LITELLM_MODEL', value: '' }),
+        expect.objectContaining({ key: 'AGENT_LITELLM_MODEL', value: '' }),
+        expect.objectContaining({ key: 'LITELLM_FALLBACK_MODELS', value: '' }),
+        expect.objectContaining({ key: 'VISION_MODEL', value: '' }),
+      ]),
+    );
+  });
+
+  it('keeps legacy-key-backed runtime models when enabled channels have no available models', async () => {
+    update.mockResolvedValue({
+      success: true,
+      configVersion: 'v2',
+      appliedCount: 1,
+      skippedMaskedCount: 0,
+      reloadTriggered: true,
+      updatedKeys: ['LLM_PRIMARY_BASE_URL', 'LITELLM_MODEL', 'LITELLM_FALLBACK_MODELS'],
+      warnings: [],
+    });
+
+    render(
+      <LLMChannelEditor
+        items={[
+          { key: 'LLM_CHANNELS', value: 'primary' },
+          { key: 'LLM_PRIMARY_PROTOCOL', value: 'openai' },
+          { key: 'LLM_PRIMARY_BASE_URL', value: 'https://api.example.com/v1' },
+          { key: 'LLM_PRIMARY_ENABLED', value: 'false' },
+          { key: 'LLM_PRIMARY_API_KEY', value: 'sk-test' },
+          { key: 'LLM_PRIMARY_MODELS', value: 'gpt-4o-mini' },
+          { key: 'OPENAI_API_KEY', value: 'sk-legacy-value' },
+          { key: 'LITELLM_MODEL', value: 'openai/gpt-4o-mini' },
+          { key: 'LITELLM_FALLBACK_MODELS', value: 'openai/gpt-4o' },
+          { key: 'AGENT_LITELLM_MODEL', value: '' },
+          { key: 'VISION_MODEL', value: '' },
+        ]}
+        configVersion="v1"
+        maskToken="******"
+        onSaved={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /primary/i }));
+    fireEvent.change(screen.getByLabelText('Base URL'), {
+      target: { value: 'https://api.example.com/compatible/v1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
+
+    await waitFor(() => {
+      expect(update).toHaveBeenCalled();
+    });
+
+    const updatePayload = update.mock.calls[0][0];
+    expect(updatePayload.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'LITELLM_MODEL', value: 'openai/gpt-4o-mini' }),
+        expect.objectContaining({ key: 'LITELLM_FALLBACK_MODELS', value: 'openai/gpt-4o' }),
+      ]),
+    );
+  });
+
   it('shows cleanup warning and restore path after stale runtime models are removed on save', async () => {
     update.mockResolvedValue({
       success: true,
