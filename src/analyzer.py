@@ -133,26 +133,40 @@ def apply_placeholder_fill(result: "AnalysisResult", missing_fields: List[str]) 
         elif field == "dashboard.core_conclusion.one_sentence":
             if not result.dashboard:
                 result.dashboard = {}
-            if "core_conclusion" not in result.dashboard:
-                result.dashboard["core_conclusion"] = {}
+            core = result.dashboard.get("core_conclusion")
+            if not isinstance(core, dict):
+                core = {}
+                result.dashboard["core_conclusion"] = core
+            fallback_sentence = (
+                result.analysis_summary
+                or result.operation_advice
+                or placeholder
+            )
             result.dashboard["core_conclusion"]["one_sentence"] = (
-                result.dashboard["core_conclusion"].get("one_sentence") or placeholder
+                core.get("one_sentence") or fallback_sentence
             )
         elif field == "dashboard.intelligence.risk_alerts":
             if not result.dashboard:
                 result.dashboard = {}
-            if "intelligence" not in result.dashboard:
-                result.dashboard["intelligence"] = {}
-            if "risk_alerts" not in result.dashboard["intelligence"]:
-                result.dashboard["intelligence"]["risk_alerts"] = []
+            intelligence = result.dashboard.get("intelligence")
+            if not isinstance(intelligence, dict):
+                intelligence = {}
+                result.dashboard["intelligence"] = intelligence
+            if "risk_alerts" not in intelligence:
+                risk_warning = (result.risk_warning or "").strip()
+                intelligence["risk_alerts"] = [risk_warning] if risk_warning else []
         elif field == "dashboard.battle_plan.sniper_points.stop_loss":
             if not result.dashboard:
                 result.dashboard = {}
-            if "battle_plan" not in result.dashboard:
-                result.dashboard["battle_plan"] = {}
-            if "sniper_points" not in result.dashboard["battle_plan"]:
-                result.dashboard["battle_plan"]["sniper_points"] = {}
-            result.dashboard["battle_plan"]["sniper_points"]["stop_loss"] = placeholder
+            battle_plan = result.dashboard.get("battle_plan")
+            if not isinstance(battle_plan, dict):
+                battle_plan = {}
+                result.dashboard["battle_plan"] = battle_plan
+            sniper_points = battle_plan.get("sniper_points")
+            if not isinstance(sniper_points, dict):
+                sniper_points = {}
+                battle_plan["sniper_points"] = sniper_points
+            sniper_points["stop_loss"] = sniper_points.get("stop_loss") or placeholder
 
 
 # ---------- chip_structure fallback (Issue #589) ----------

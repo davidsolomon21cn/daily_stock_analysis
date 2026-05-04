@@ -517,6 +517,103 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result.decision_type, "buy")
         self.assertIn("trend:fallback", result.data_sources)
 
+    def test_convert_partial_dashboard_uses_trend_fallback_for_missing_scalars(self):
+        """Partial Agent dashboards should keep AI fields while filling missing scalars locally."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.enums import ReportType
+        from src.stock_analyzer import BuySignal, TrendAnalysisResult, TrendStatus
+
+        agent_result = AgentResult(
+            success=True,
+            content="{}",
+            dashboard={
+                "stock_name": "贵州茅台",
+                "dashboard": {
+                    "core_conclusion": {"one_sentence": "AI 已给出的核心结论"},
+                    "intelligence": {"risk_alerts": ["AI 风险"]},
+                    "battle_plan": {"sniper_points": {"take_profit": "120元"}},
+                },
+            },
+            provider="gemini",
+        )
+        trend_result = TrendAnalysisResult(
+            code="600519",
+            trend_status=TrendStatus.BULL,
+            buy_signal=BuySignal.BUY,
+            signal_score=66,
+            support_levels=[108.5],
+            risk_factors=["跌破 MA20"],
+        )
+
+        result = pipeline._agent_result_to_analysis_result(
+            agent_result,
+            "600519",
+            "贵州茅台",
+            ReportType.SIMPLE,
+            "q-partial-dashboard",
+            trend_result=trend_result,
+        )
+
+        self.assertEqual(result.sentiment_score, 66)
+        self.assertEqual(result.trend_prediction, "多头排列")
+        self.assertEqual(result.operation_advice, "买入")
+        self.assertEqual(result.decision_type, "buy")
+        self.assertEqual(result.dashboard["sentiment_score"], 66)
+        self.assertEqual(result.dashboard["operation_advice"], "买入")
+        self.assertEqual(result.dashboard["core_conclusion"]["one_sentence"], "AI 已给出的核心结论")
+        self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], ["AI 风险"])
+        self.assertEqual(result.dashboard["battle_plan"]["sniper_points"]["stop_loss"], 108.5)
+        self.assertIn("trend:fallback", result.data_sources)
+
+    def test_convert_placeholder_dashboard_is_completed_from_local_context(self):
+        """Placeholder dashboard blocks should be completed without falling back to neutral defaults."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.analyzer import check_content_integrity
+        from src.enums import ReportType
+        from src.stock_analyzer import BuySignal, TrendAnalysisResult, TrendStatus
+
+        agent_result = AgentResult(
+            success=True,
+            content="{}",
+            dashboard={
+                "stock_name": "贵州茅台",
+                "dashboard": {
+                    "core_conclusion": {"one_sentence": "待补充"},
+                    "intelligence": {},
+                    "battle_plan": {"sniper_points": {"stop_loss": ""}},
+                },
+            },
+            provider="gemini",
+        )
+        trend_result = TrendAnalysisResult(
+            code="600519",
+            trend_status=TrendStatus.BULL,
+            buy_signal=BuySignal.BUY,
+            signal_score=62,
+            risk_factors=["趋势跌破支撑需减仓"],
+        )
+
+        result = pipeline._agent_result_to_analysis_result(
+            agent_result,
+            "600519",
+            "贵州茅台",
+            ReportType.SIMPLE,
+            "q-placeholder-dashboard",
+            trend_result=trend_result,
+        )
+
+        ok, missing = check_content_integrity(result)
+        self.assertTrue(ok, missing)
+        self.assertEqual(result.sentiment_score, 62)
+        self.assertEqual(result.dashboard["sentiment_score"], 62)
+        self.assertEqual(result.dashboard["core_conclusion"]["one_sentence"], result.analysis_summary)
+        self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], ["趋势跌破支撑需减仓"])
+        self.assertEqual(result.dashboard["battle_plan"]["sniper_points"]["stop_loss"], "待补充")
+
     def test_convert_invalid_dashboard_normalizes_strong_trend_decision_type(self):
         """Fallback preserves strong advice text while keeping stable decision_type values."""
         pipeline = self._make_pipeline()

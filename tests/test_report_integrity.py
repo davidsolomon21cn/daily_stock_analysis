@@ -194,6 +194,37 @@ class TestApplyPlaceholderFill(unittest.TestCase):
         apply_placeholder_fill(result, ["dashboard.intelligence.risk_alerts"])
         self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], [])
 
+    def test_fills_none_dashboard_blocks_from_existing_context(self) -> None:
+        """Placeholder fill handles null dashboard blocks and reuses existing result text."""
+        result = AnalysisResult(
+            code="600519",
+            name="贵州茅台",
+            trend_prediction="看多",
+            sentiment_score=70,
+            operation_advice="买入",
+            analysis_summary="已有趋势摘要",
+            risk_warning="跌破支撑需减仓",
+            decision_type="buy",
+            dashboard={
+                "core_conclusion": None,
+                "intelligence": None,
+                "battle_plan": None,
+            },
+        )
+
+        apply_placeholder_fill(
+            result,
+            [
+                "dashboard.core_conclusion.one_sentence",
+                "dashboard.intelligence.risk_alerts",
+                "dashboard.battle_plan.sniper_points.stop_loss",
+            ],
+        )
+
+        self.assertEqual(result.dashboard["core_conclusion"]["one_sentence"], "已有趋势摘要")
+        self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], ["跌破支撑需减仓"])
+        self.assertEqual(result.dashboard["battle_plan"]["sniper_points"]["stop_loss"], "待补充")
+
 
 class TestIntegrityRetryPrompt(unittest.TestCase):
     """Retry prompt construction tests."""
