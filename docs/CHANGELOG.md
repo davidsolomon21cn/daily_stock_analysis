@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 > For user-friendly release highlights, see the [GitHub Releases](https://github.com/ZhuLinsen/daily_stock_analysis/releases) page.
 
 ## [Unreleased]
+- [文档] 扩展 `docs/llm-providers.md` 为小白友好版配置路线图，新增 provider 配置边界/官方来源、Actions secrets/variables 对照、Web UI 步骤、常见错误与回滚方式，并同步中英文配置指南跳转入口。
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->

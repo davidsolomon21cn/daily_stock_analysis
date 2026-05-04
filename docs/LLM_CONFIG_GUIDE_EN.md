@@ -4,6 +4,8 @@ Welcome! Whether you are a beginner newly exposed to AI or a veteran skilled wit
 
 This project exposes a unified AI model access flow that supports official APIs, OpenAI-compatible platforms, and local models. Under the hood it is powered by [LiteLLM](https://docs.litellm.ai/), but most users only need to think in terms of picking a provider, adding an API key, and optionally choosing a primary model or channels. To cater to different experience levels, we provide a three-tier configuration hierarchy. Choose the method that fits you best.
 
+Before following this guide, check [LLM Provider Quick Reference](./llm-providers.md) first for provider/base URL/model boundaries and GitHub Actions variable placement (Secrets vs Variables).
+
 ---
 
 ## Quick Navigation: Which section should you read?
