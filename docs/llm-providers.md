@@ -25,7 +25,7 @@ Web 设置页展示的 provider 能力标签、官方来源链接和配置注意
 3. 启动后在 Web 设置页点开「AI 模型」仅查看鉴权状态；
 4. 如鉴权成功再逐步迁移到 Channels。
 
-注意：启用 `LLM_CHANNELS` 后，简单模式变量不会参与运行时优先级。
+注意：启用 `LLM_CHANNELS` 后，若存在至少一个可用渠道（如已正确配置 `API_KEY` 与 `MODELS`），运行时优先级会优先走 Channels；若渠道配置不可用（例如 `API_KEY` / `MODELS` 缺失），系统会回退到 legacy 变量。
 
 ## 方式二：Channels 渠道配置（推荐）
 
