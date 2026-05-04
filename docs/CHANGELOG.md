@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 > For user-friendly release highlights, see the [GitHub Releases](https://github.com/ZhuLinsen/daily_stock_analysis/releases) page.
 
 ## [Unreleased]
-- [文档] 扩展 `docs/llm-providers.md` 为小白友好版配置路线图，新增 provider 配置边界/官方来源、Actions secrets/variables 对照、Web UI 步骤、常见错误与回滚方式，并同步中英文配置指南跳转入口。
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
@@ -31,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [改进] 补齐 LLM provider channel 在 GitHub Actions 中的显式映射，并同步 `.env` 示例与配置文档。
 - [改进] Web LLM 渠道编辑器展示 provider 能力标签、官方来源链接和配置注意事项提示；这些标签仅用于配置参考，不代表运行时能力已验证通过。
 - [新功能] 支持 `ANSPIRE_API_KEYS` 默认接入 Anspire OpenAI-compatible 大模型网关，并在 LLM 渠道编辑器补充 Anspire Open 预设。
+- [文档] 扩展 `docs/llm-providers.md` 为小白友好版配置路线图，新增 provider 配置边界/官方来源、Actions secrets/variables 对照、Web UI 步骤、常见错误与回滚方式，并同步中英文配置指南跳转入口。
 
 ## [3.14.2] - 2026-04-30
 
