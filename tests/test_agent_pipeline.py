@@ -517,6 +517,48 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result.decision_type, "buy")
         self.assertIn("trend:fallback", result.data_sources)
 
+    def test_convert_empty_dashboard_backfills_local_trend_dashboard(self):
+        """Empty Agent dashboard should still produce an integrity-ready local fallback dashboard."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.analyzer import check_content_integrity
+        from src.enums import ReportType
+        from src.stock_analyzer import BuySignal, TrendAnalysisResult, TrendStatus
+
+        agent_result = AgentResult(
+            success=True,
+            content="{}",
+            dashboard={},
+            provider="gemini",
+        )
+        trend_result = TrendAnalysisResult(
+            code="600519",
+            trend_status=TrendStatus.BULL,
+            buy_signal=BuySignal.BUY,
+            signal_score=68,
+            support_levels=[112.3],
+            risk_factors=["跌破 MA20 需止损"],
+        )
+
+        result = pipeline._agent_result_to_analysis_result(
+            agent_result,
+            "600519",
+            "贵州茅台",
+            ReportType.SIMPLE,
+            "q-empty-dashboard",
+            trend_result=trend_result,
+        )
+
+        ok, missing = check_content_integrity(result)
+        self.assertTrue(ok, missing)
+        self.assertEqual(result.sentiment_score, 68)
+        self.assertEqual(result.analysis_summary, "趋势结论：多头排列；操作建议：买入。")
+        self.assertEqual(result.dashboard["sentiment_score"], 68)
+        self.assertEqual(result.dashboard["core_conclusion"]["one_sentence"], result.analysis_summary)
+        self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], ["跌破 MA20 需止损"])
+        self.assertEqual(result.dashboard["battle_plan"]["sniper_points"]["stop_loss"], 112.3)
+
     def test_convert_partial_dashboard_uses_trend_fallback_for_missing_scalars(self):
         """Partial Agent dashboards should keep AI fields while filling missing scalars locally."""
         pipeline = self._make_pipeline()

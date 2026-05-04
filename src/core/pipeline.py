@@ -1008,6 +1008,12 @@ class StockAnalysisPipeline:
             self._backfill_agent_dashboard_fields(result, trend_result, report_language)
         else:
             self._apply_trend_fallback(result, trend_result, report_language)
+            if trend_result is not None:
+                result.analysis_summary = (
+                    result.analysis_summary
+                    or self._summary_fallback_from_result(result, report_language)
+                )
+                self._backfill_agent_dashboard_fields(result, trend_result, report_language)
             if not result.error_message:
                 result.error_message = "Agent failed to generate a valid decision dashboard" if report_language == "en" else "Agent 未能生成有效的决策仪表盘"
 
