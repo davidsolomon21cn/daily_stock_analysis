@@ -34,6 +34,8 @@ from src.report_language import (
     get_unknown_text,
     infer_decision_type_from_advice,
     localize_confidence_level,
+    localize_operation_advice,
+    localize_trend_prediction,
     normalize_report_language,
 )
 from src.search_service import SearchService
@@ -945,7 +947,10 @@ class StockAnalysisPipeline:
 
             raw_trend = self._agent_dashboard_value(dash, nested_dashboard, "trend_prediction")
             if self._is_agent_field_missing(raw_trend):
-                trend_label = self._trend_label_fallback(trend_result)
+                trend_label = self._trend_label_fallback(
+                    trend_result,
+                    report_language,
+                )
                 if trend_label:
                     result.trend_prediction = trend_label
                     self._mark_trend_fallback_source(result)
@@ -953,27 +958,27 @@ class StockAnalysisPipeline:
                 result.trend_prediction = str(raw_trend)
 
             raw_advice = self._agent_dashboard_value(dash, nested_dashboard, "operation_advice")
-            if isinstance(raw_advice, dict) and raw_advice:
+            extracted_advice = ""
+            if isinstance(raw_advice, dict):
                 # LLM may return {"no_position": "...", "has_position": "..."}
-                # Derive a short string from decision_type for the scalar field
-                _signal_to_advice = {
-                    "buy": "Buy" if report_language == "en" else "买入",
-                    "sell": "Sell" if report_language == "en" else "卖出",
-                    "hold": "Hold" if report_language == "en" else "持有",
-                    "strong_buy": "Strong Buy" if report_language == "en" else "强烈买入",
-                    "strong_sell": "Strong Sell" if report_language == "en" else "强烈卖出",
-                }
-                # Normalize decision_type (strip/lower) before lookup so
-                # variants like "BUY" or " Buy " map correctly.
-                raw_dt = str(
-                    self._agent_dashboard_value(dash, nested_dashboard, "decision_type")
-                    or "hold"
-                ).strip().lower()
-                result.operation_advice = _signal_to_advice.get(raw_dt, "Watch" if report_language == "en" else "观望")
+                extracted_advice = self._extract_advice_text_from_dict(raw_advice)
+                if extracted_advice:
+                    result.operation_advice = localize_operation_advice(
+                        extracted_advice,
+                        report_language,
+                    )
+                else:
+                    signal_label = self._trend_signal_fallback(
+                        trend_result,
+                        report_language,
+                    )
+                    if signal_label:
+                        result.operation_advice = signal_label
+                        self._mark_trend_fallback_source(result)
             elif not self._is_agent_field_missing(raw_advice):
                 result.operation_advice = str(raw_advice) if raw_advice else ("Watch" if report_language == "en" else "观望")
             else:
-                signal_label = self._trend_signal_fallback(trend_result)
+                signal_label = self._trend_signal_fallback(trend_result, report_language)
                 if signal_label:
                     result.operation_advice = signal_label
                     self._mark_trend_fallback_source(result)
@@ -982,11 +987,20 @@ class StockAnalysisPipeline:
             raw_decision = self._agent_dashboard_value(dash, nested_dashboard, "decision_type")
             if self._is_agent_field_missing(raw_decision):
                 trend_decision = self._trend_decision_fallback(trend_result)
-                result.decision_type = trend_decision or infer_decision_type_from_advice(
-                    result.operation_advice,
-                    default="hold",
-                )
-                if trend_decision:
+                if isinstance(raw_advice, dict):
+                    inferred = infer_decision_type_from_advice(
+                        result.operation_advice,
+                        default="",
+                    )
+                    result.decision_type = inferred or (trend_decision or "hold")
+                    used_trend_decision = not inferred and not extracted_advice and bool(trend_decision)
+                else:
+                    result.decision_type = trend_decision or infer_decision_type_from_advice(
+                        result.operation_advice,
+                        default="hold",
+                    )
+                    used_trend_decision = bool(trend_decision)
+                if used_trend_decision:
                     self._mark_trend_fallback_source(result)
             else:
                 result.decision_type = normalize_decision_signal(raw_decision)
@@ -1030,6 +1044,22 @@ class StockAnalysisPipeline:
         return value
 
     @staticmethod
+    def _extract_advice_text_from_dict(raw_advice: dict) -> str:
+        for field in ("has_position", "no_position"):
+            if isinstance(raw_advice.get(field), str):
+                text = raw_advice[field].strip()
+                if text:
+                    return text
+
+        for value in raw_advice.values():
+            if isinstance(value, str):
+                text = value.strip()
+                if text:
+                    return text
+
+        return ""
+
+    @staticmethod
     def _is_agent_field_missing(value: Any) -> bool:
         if value is None:
             return True
@@ -1058,18 +1088,28 @@ class StockAnalysisPipeline:
         return score if score > 0 else None
 
     @staticmethod
-    def _trend_label_fallback(trend_result: Optional[TrendAnalysisResult]) -> str:
+    def _trend_label_fallback(
+        trend_result: Optional[TrendAnalysisResult],
+        report_language: str = "zh",
+    ) -> str:
         if trend_result is None:
             return ""
         trend_status = getattr(trend_result, "trend_status", None)
-        return getattr(trend_status, "value", None) or str(trend_status or "").strip()
+        value = getattr(trend_status, "value", None) or str(trend_status or "").strip()
+        if report_language != "en":
+            return value
+        return localize_trend_prediction(value, report_language)
 
     @staticmethod
-    def _trend_signal_fallback(trend_result: Optional[TrendAnalysisResult]) -> str:
+    def _trend_signal_fallback(
+        trend_result: Optional[TrendAnalysisResult],
+        report_language: str = "zh",
+    ) -> str:
         if trend_result is None:
             return ""
         buy_signal = getattr(trend_result, "buy_signal", None)
-        return getattr(buy_signal, "value", None) or str(buy_signal or "").strip()
+        value = getattr(buy_signal, "value", None) or str(buy_signal or "").strip()
+        return localize_operation_advice(value, report_language)
 
     @staticmethod
     def _trend_decision_fallback(trend_result: Optional[TrendAnalysisResult]) -> Optional[str]:
@@ -1188,13 +1228,15 @@ class StockAnalysisPipeline:
             numeric_score = 50
         result.sentiment_score = numeric_score if numeric_score > 0 else 50
 
-        trend_status = getattr(trend_result, "trend_status", None)
-        trend_label = getattr(trend_status, "value", None) or str(trend_status or "").strip()
+        trend_label = StockAnalysisPipeline._trend_label_fallback(trend_result, report_language)
         if trend_label:
             result.trend_prediction = trend_label
 
         buy_signal = getattr(trend_result, "buy_signal", None)
-        signal_label = getattr(buy_signal, "value", None) or str(buy_signal or "").strip()
+        signal_label = StockAnalysisPipeline._trend_signal_fallback(
+            trend_result,
+            report_language,
+        )
         if signal_label:
             result.operation_advice = signal_label
         else:

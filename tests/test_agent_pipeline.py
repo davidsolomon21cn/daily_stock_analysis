@@ -559,6 +559,74 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], ["跌破 MA20 需止损"])
         self.assertEqual(result.dashboard["battle_plan"]["sniper_points"]["stop_loss"], 112.3)
 
+    def test_convert_dict_operation_advice_missing_decision_type_preserves_buy_signal(self):
+        """When operation_advice is dict without decision_type, preserve dict-derived buy/sell hint."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.enums import ReportType
+
+        agent_result = AgentResult(
+            success=True,
+            content="{}",
+            dashboard={
+                "operation_advice": {
+                    "has_position": "买入",
+                    "no_position": "观望",
+                },
+                "trend_prediction": "看多",
+                "sentiment_score": 74,
+            },
+            provider="ollama",
+        )
+
+        result = pipeline._agent_result_to_analysis_result(
+            agent_result,
+            "600519",
+            "贵州茅台",
+            ReportType.SIMPLE,
+            "q-dict-advice",
+        )
+
+        self.assertEqual(result.operation_advice, "买入")
+        self.assertEqual(result.decision_type, "buy")
+
+    def test_convert_empty_dashboard_backfills_localized_trend_fallback_for_en(self):
+        """English reports should keep trend/advice fallback values localized."""
+        pipeline = self._make_pipeline()
+        pipeline.config.report_language = "en"
+
+        from src.agent.executor import AgentResult
+        from src.enums import ReportType
+        from src.stock_analyzer import BuySignal, TrendAnalysisResult, TrendStatus
+
+        agent_result = AgentResult(
+            success=True,
+            content="{}",
+            dashboard={},
+            provider="gemini",
+        )
+        trend_result = TrendAnalysisResult(
+            code="600519",
+            trend_status=TrendStatus.BULL,
+            buy_signal=BuySignal.BUY,
+            signal_score=70,
+        )
+
+        result = pipeline._agent_result_to_analysis_result(
+            agent_result,
+            "600519",
+            "贵州茅台",
+            ReportType.SIMPLE,
+            "q-en-fallback",
+            trend_result=trend_result,
+        )
+
+        self.assertEqual(result.report_language, "en")
+        self.assertEqual(result.trend_prediction, "Bullish")
+        self.assertEqual(result.operation_advice, "Buy")
+        self.assertEqual(result.dashboard["trend_prediction"], "Bullish")
+        self.assertEqual(result.dashboard["operation_advice"], "Buy")
     def test_convert_partial_dashboard_uses_trend_fallback_for_missing_scalars(self):
         """Partial Agent dashboards should keep AI fields while filling missing scalars locally."""
         pipeline = self._make_pipeline()

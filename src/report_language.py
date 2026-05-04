@@ -60,10 +60,17 @@ _OPERATION_ADVICE_TRANSLATIONS = {
 }
 
 _TREND_PREDICTION_CANONICAL_MAP = {
+    "强势空头": "strong_bearish",
     "强烈看多": "strong_bullish",
     "strong bullish": "strong_bullish",
     "very bullish": "strong_bullish",
+    "强势多头": "strong_bullish",
+    "多头排列": "bullish",
+    "空头排列": "bearish",
+    "弱势多头": "bullish",
+    "弱势空头": "bearish",
     "看多": "bullish",
+    "盘整": "sideways",
     "bullish": "bullish",
     "uptrend": "bullish",
     "震荡": "sideways",
