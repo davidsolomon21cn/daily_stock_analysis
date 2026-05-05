@@ -159,7 +159,7 @@ test_full() {
 test_quick() {
     header "测试场景: 快速测试"
     info "单只股票快速测试..."
-    python3 main.py --stocks 600519 --no-market-review
+    python3 main.py --stocks 600519 --no-market-review "$@"
     success "快速测试完成"
 }
 
