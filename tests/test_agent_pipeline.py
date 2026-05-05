@@ -624,6 +624,39 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result.decision_type, "sell")
         self.assertEqual(result.dashboard["operation_advice"], "减仓")
 
+    def test_convert_malformed_top_level_summary_uses_nested_dashboard_summary(self):
+        """Malformed top-level analysis_summary should not block nested dashboard fallback."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.enums import ReportType
+
+        agent_result = AgentResult(
+            success=True,
+            content="{}",
+            dashboard={
+                "analysis_summary": [],
+                "dashboard": {
+                    "analysis_summary": "AI 已给出的摘要",
+                    "trend_prediction": "看多",
+                    "operation_advice": "持有",
+                    "sentiment_score": 73,
+                },
+            },
+            provider="gemini",
+        )
+
+        result = pipeline._agent_result_to_analysis_result(
+            agent_result,
+            "600519",
+            "贵州茅台",
+            ReportType.SIMPLE,
+            "q-nested-summary",
+        )
+
+        self.assertEqual(result.analysis_summary, "AI 已给出的摘要")
+        self.assertEqual(result.dashboard["analysis_summary"], "AI 已给出的摘要")
+
     def test_convert_malformed_scalar_fields_fallback_to_trend_result(self):
         """Malformed non-scalar scalar fields should not be treated as valid values."""
         pipeline = self._make_pipeline()

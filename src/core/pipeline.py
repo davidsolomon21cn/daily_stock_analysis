@@ -1027,7 +1027,12 @@ class StockAnalysisPipeline:
                 or result.confidence_level,
                 report_language,
             )
-            raw_summary = self._agent_dashboard_value(dash, nested_dashboard, "analysis_summary")
+            raw_summary = self._agent_dashboard_value(
+                dash,
+                nested_dashboard,
+                "analysis_summary",
+                scalar=True,
+            )
             if not self._is_agent_field_missing(raw_summary, scalar=True):
                 result.analysis_summary = str(raw_summary)
             else:
