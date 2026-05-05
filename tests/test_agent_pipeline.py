@@ -693,6 +693,40 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result.analysis_summary, "AI 已给出的摘要")
         self.assertEqual(result.dashboard["analysis_summary"], "AI 已给出的摘要")
 
+    def test_convert_non_string_summary_falls_back_to_nested_or_local_summary(self):
+        """Non-string analysis_summary should trigger fallback to nested summary or local fallback."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.enums import ReportType
+
+        for raw_summary in (0, False):
+            agent_result = AgentResult(
+                success=True,
+                content="{}",
+                dashboard={
+                    "analysis_summary": raw_summary,
+                    "trend_prediction": "看多",
+                    "dashboard": {
+                        "analysis_summary": "AI 已给出的摘要",
+                    },
+                    "operation_advice": "持有",
+                    "sentiment_score": 73,
+                },
+                provider="gemini",
+            )
+
+            result = pipeline._agent_result_to_analysis_result(
+                agent_result,
+                "600519",
+                "贵州茅台",
+                ReportType.SIMPLE,
+                f"q-summary-non-string-{raw_summary}",
+            )
+
+            self.assertEqual(result.analysis_summary, "AI 已给出的摘要")
+            self.assertEqual(result.dashboard["analysis_summary"], "AI 已给出的摘要")
+
     def test_convert_malformed_scalar_fields_fallback_to_trend_result(self):
         """Malformed non-scalar scalar fields should not be treated as valid values."""
         pipeline = self._make_pipeline()

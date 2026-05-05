@@ -955,8 +955,9 @@ class StockAnalysisPipeline:
                 nested_dashboard,
                 "trend_prediction",
                 scalar=True,
+                expect_text=True,
             )
-            if self._is_agent_field_missing(raw_trend, scalar=True):
+            if self._is_agent_field_missing(raw_trend, scalar=True, expect_text=True):
                 trend_label = self._trend_label_fallback(
                     trend_result,
                     report_language,
@@ -973,6 +974,7 @@ class StockAnalysisPipeline:
                 "operation_advice",
                 scalar=True,
                 allow_dict=True,
+                expect_text=True,
             )
             extracted_advice = ""
             if isinstance(raw_advice, dict):
@@ -991,7 +993,12 @@ class StockAnalysisPipeline:
                     if signal_label:
                         result.operation_advice = signal_label
                         self._mark_trend_fallback_source(result)
-            elif not self._is_agent_field_missing(raw_advice, scalar=True, allow_dict=True):
+            elif not self._is_agent_field_missing(
+                raw_advice,
+                scalar=True,
+                allow_dict=True,
+                expect_text=True,
+            ):
                 result.operation_advice = str(raw_advice) if raw_advice else ("Watch" if report_language == "en" else "观望")
             else:
                 signal_label = self._trend_signal_fallback(trend_result, report_language)
@@ -1005,8 +1012,9 @@ class StockAnalysisPipeline:
                 nested_dashboard,
                 "decision_type",
                 scalar=True,
+                expect_text=True,
             )
-            if self._is_agent_field_missing(raw_decision, scalar=True):
+            if self._is_agent_field_missing(raw_decision, scalar=True, expect_text=True):
                 trend_decision = self._trend_decision_fallback(trend_result)
                 decision_from_advice = infer_decision_type_from_advice(
                     result.operation_advice,
@@ -1014,7 +1022,16 @@ class StockAnalysisPipeline:
                 )
                 if decision_from_advice:
                     result.decision_type = decision_from_advice
-                    if self._is_agent_field_missing(raw_advice, scalar=True, allow_dict=True) and not extracted_advice and trend_decision:
+                    if (
+                        self._is_agent_field_missing(
+                            raw_advice,
+                            scalar=True,
+                            allow_dict=True,
+                            expect_text=True,
+                        )
+                        and not extracted_advice
+                        and trend_decision
+                    ):
                         self._mark_trend_fallback_source(result)
                 else:
                     result.decision_type = trend_decision or "hold"
@@ -1032,8 +1049,9 @@ class StockAnalysisPipeline:
                 nested_dashboard,
                 "analysis_summary",
                 scalar=True,
+                expect_text=True,
             )
-            if not self._is_agent_field_missing(raw_summary, scalar=True):
+            if not self._is_agent_field_missing(raw_summary, scalar=True, expect_text=True):
                 result.analysis_summary = str(raw_summary)
             else:
                 result.analysis_summary = self._summary_fallback_from_result(result, report_language)
@@ -1064,6 +1082,7 @@ class StockAnalysisPipeline:
         *,
         scalar: bool = False,
         allow_dict: bool = False,
+        expect_text: bool = False,
     ) -> Any:
         """Read a scalar from top-level agent payload, then nested dashboard fallback."""
         value = dash.get(key) if isinstance(dash, dict) else None
@@ -1071,12 +1090,14 @@ class StockAnalysisPipeline:
             value,
             scalar=scalar,
             allow_dict=allow_dict,
+            expect_text=expect_text,
         ):
             nested_value = nested_dashboard.get(key)
             if not StockAnalysisPipeline._is_agent_field_missing(
                 nested_value,
                 scalar=scalar,
                 allow_dict=allow_dict,
+                expect_text=expect_text,
             ):
                 value = nested_value
         return value
@@ -1114,6 +1135,7 @@ class StockAnalysisPipeline:
         *,
         scalar: bool = False,
         allow_dict: bool = False,
+        expect_text: bool = False,
     ) -> bool:
         if scalar and isinstance(value, dict):
             if not allow_dict or not value:
@@ -1121,6 +1143,9 @@ class StockAnalysisPipeline:
             return not StockAnalysisPipeline._extract_advice_text_from_dict(value)
         if value is None:
             return True
+        if expect_text and scalar:
+            if not isinstance(value, str):
+                return True
         if isinstance(value, str):
             text = value.strip()
             return StockAnalysisPipeline._is_agent_placeholder_text(text)
@@ -1219,7 +1244,10 @@ class StockAnalysisPipeline:
             "analysis_summary",
         ):
             current = dashboard.get(key)
-            if self._is_agent_field_missing(current, scalar=True):
+            if key == "sentiment_score":
+                if self._is_agent_field_missing(current, scalar=True):
+                    dashboard[key] = getattr(result, key)
+            elif self._is_agent_field_missing(current, scalar=True, expect_text=True):
                 dashboard[key] = getattr(result, key)
 
         core = dashboard.get("core_conclusion")
