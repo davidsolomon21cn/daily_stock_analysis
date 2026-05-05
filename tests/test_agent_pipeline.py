@@ -591,6 +591,48 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result.operation_advice, "买入")
         self.assertEqual(result.decision_type, "buy")
 
+    def test_convert_malformed_scalar_fields_fallback_to_trend_result(self):
+        """Malformed non-scalar scalar fields should not be treated as valid values."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.enums import ReportType
+        from src.stock_analyzer import BuySignal, TrendAnalysisResult, TrendStatus
+
+        agent_result = AgentResult(
+            success=True,
+            content="{}",
+            dashboard={
+                "sentiment_score": {"value": ""},
+                "trend_prediction": [],
+                "operation_advice": [],
+                "decision_type": {},
+            },
+            provider="gemini",
+        )
+        trend_result = TrendAnalysisResult(
+            code="600519",
+            trend_status=TrendStatus.BULL,
+            buy_signal=BuySignal.BUY,
+            signal_score=66,
+        )
+
+        result = pipeline._agent_result_to_analysis_result(
+            agent_result,
+            "600519",
+            "贵州茅台",
+            ReportType.SIMPLE,
+            "q-malformed-scalars",
+            trend_result=trend_result,
+        )
+
+        self.assertEqual(result.sentiment_score, 66)
+        self.assertEqual(result.trend_prediction, "多头排列")
+        self.assertEqual(result.operation_advice, "买入")
+        self.assertEqual(result.decision_type, "buy")
+        self.assertEqual(result.dashboard["sentiment_score"], 66)
+        self.assertEqual(result.dashboard["trend_prediction"], "多头排列")
+        self.assertEqual(result.dashboard["operation_advice"], "买入")
     def test_convert_empty_dashboard_backfills_localized_trend_fallback_for_en(self):
         """English reports should keep trend/advice fallback values localized."""
         pipeline = self._make_pipeline()

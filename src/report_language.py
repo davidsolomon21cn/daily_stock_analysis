@@ -436,9 +436,16 @@ def localize_operation_advice(value: Any, language: Optional[str]) -> str:
 
 def localize_trend_prediction(value: Any, language: Optional[str]) -> str:
     """Translate trend prediction between Chinese and English when recognized."""
+    normalized_language = normalize_report_language(language)
+    raw_text = str(value or "").strip()
+    if not raw_text:
+        return raw_text
+    if normalized_language == "zh":
+        if re.search(r"[\u4e00-\u9fff]", raw_text):
+            return raw_text
     return _translate_from_map(
         value,
-        language,
+        normalized_language,
         canonical_map=_TREND_PREDICTION_CANONICAL_MAP,
         translations=_TREND_PREDICTION_TRANSLATIONS,
     )

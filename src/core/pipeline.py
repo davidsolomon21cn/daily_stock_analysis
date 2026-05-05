@@ -936,8 +936,13 @@ class StockAnalysisPipeline:
 
             nested_dashboard = dash.get("dashboard") if isinstance(dash, dict) else None
 
-            raw_score = self._agent_dashboard_value(dash, nested_dashboard, "sentiment_score")
-            if self._is_agent_field_missing(raw_score):
+            raw_score = self._agent_dashboard_value(
+                dash,
+                nested_dashboard,
+                "sentiment_score",
+                scalar=True,
+            )
+            if self._is_agent_field_missing(raw_score, scalar=True):
                 fallback_score = self._trend_score_fallback(trend_result)
                 if fallback_score is not None:
                     result.sentiment_score = fallback_score
@@ -945,8 +950,13 @@ class StockAnalysisPipeline:
             else:
                 result.sentiment_score = self._safe_int(raw_score, 50)
 
-            raw_trend = self._agent_dashboard_value(dash, nested_dashboard, "trend_prediction")
-            if self._is_agent_field_missing(raw_trend):
+            raw_trend = self._agent_dashboard_value(
+                dash,
+                nested_dashboard,
+                "trend_prediction",
+                scalar=True,
+            )
+            if self._is_agent_field_missing(raw_trend, scalar=True):
                 trend_label = self._trend_label_fallback(
                     trend_result,
                     report_language,
@@ -957,7 +967,13 @@ class StockAnalysisPipeline:
             else:
                 result.trend_prediction = str(raw_trend)
 
-            raw_advice = self._agent_dashboard_value(dash, nested_dashboard, "operation_advice")
+            raw_advice = self._agent_dashboard_value(
+                dash,
+                nested_dashboard,
+                "operation_advice",
+                scalar=True,
+                allow_dict=True,
+            )
             extracted_advice = ""
             if isinstance(raw_advice, dict):
                 # LLM may return {"no_position": "...", "has_position": "..."}
@@ -975,7 +991,7 @@ class StockAnalysisPipeline:
                     if signal_label:
                         result.operation_advice = signal_label
                         self._mark_trend_fallback_source(result)
-            elif not self._is_agent_field_missing(raw_advice):
+            elif not self._is_agent_field_missing(raw_advice, scalar=True, allow_dict=True):
                 result.operation_advice = str(raw_advice) if raw_advice else ("Watch" if report_language == "en" else "观望")
             else:
                 signal_label = self._trend_signal_fallback(trend_result, report_language)
@@ -984,8 +1000,13 @@ class StockAnalysisPipeline:
                     self._mark_trend_fallback_source(result)
             from src.agent.protocols import normalize_decision_signal
 
-            raw_decision = self._agent_dashboard_value(dash, nested_dashboard, "decision_type")
-            if self._is_agent_field_missing(raw_decision):
+            raw_decision = self._agent_dashboard_value(
+                dash,
+                nested_dashboard,
+                "decision_type",
+                scalar=True,
+            )
+            if self._is_agent_field_missing(raw_decision, scalar=True):
                 trend_decision = self._trend_decision_fallback(trend_result)
                 decision_from_advice = infer_decision_type_from_advice(
                     result.operation_advice,
@@ -993,7 +1014,7 @@ class StockAnalysisPipeline:
                 )
                 if decision_from_advice:
                     result.decision_type = decision_from_advice
-                    if self._is_agent_field_missing(raw_advice) and not extracted_advice and trend_decision:
+                    if self._is_agent_field_missing(raw_advice, scalar=True, allow_dict=True) and not extracted_advice and trend_decision:
                         self._mark_trend_fallback_source(result)
                 else:
                     result.decision_type = trend_decision or "hold"
@@ -1007,7 +1028,7 @@ class StockAnalysisPipeline:
                 report_language,
             )
             raw_summary = self._agent_dashboard_value(dash, nested_dashboard, "analysis_summary")
-            if not self._is_agent_field_missing(raw_summary):
+            if not self._is_agent_field_missing(raw_summary, scalar=True):
                 result.analysis_summary = str(raw_summary)
             else:
                 result.analysis_summary = self._summary_fallback_from_result(result, report_language)
@@ -1031,12 +1052,27 @@ class StockAnalysisPipeline:
         return result
 
     @staticmethod
-    def _agent_dashboard_value(dash: Dict[str, Any], nested_dashboard: Any, key: str) -> Any:
+    def _agent_dashboard_value(
+        dash: Dict[str, Any],
+        nested_dashboard: Any,
+        key: str,
+        *,
+        scalar: bool = False,
+        allow_dict: bool = False,
+    ) -> Any:
         """Read a scalar from top-level agent payload, then nested dashboard fallback."""
         value = dash.get(key) if isinstance(dash, dict) else None
-        if isinstance(nested_dashboard, dict) and StockAnalysisPipeline._is_agent_field_missing(value):
+        if isinstance(nested_dashboard, dict) and StockAnalysisPipeline._is_agent_field_missing(
+            value,
+            scalar=scalar,
+            allow_dict=allow_dict,
+        ):
             nested_value = nested_dashboard.get(key)
-            if not StockAnalysisPipeline._is_agent_field_missing(nested_value):
+            if not StockAnalysisPipeline._is_agent_field_missing(
+                nested_value,
+                scalar=scalar,
+                allow_dict=allow_dict,
+            ):
                 value = nested_value
         return value
 
@@ -1057,7 +1093,14 @@ class StockAnalysisPipeline:
         return ""
 
     @staticmethod
-    def _is_agent_field_missing(value: Any) -> bool:
+    def _is_agent_field_missing(
+        value: Any,
+        *,
+        scalar: bool = False,
+        allow_dict: bool = False,
+    ) -> bool:
+        if scalar and isinstance(value, dict):
+            return not allow_dict
         if value is None:
             return True
         if isinstance(value, str):
@@ -1071,7 +1114,11 @@ class StockAnalysisPipeline:
                 "无",
             }
         if isinstance(value, dict):
+            if scalar:
+                return not allow_dict
             return not value
+        if scalar and isinstance(value, (list, tuple, set)):
+            return True
         return False
 
     @staticmethod
@@ -1161,14 +1208,14 @@ class StockAnalysisPipeline:
             "analysis_summary",
         ):
             current = dashboard.get(key)
-            if self._is_agent_field_missing(current):
+            if self._is_agent_field_missing(current, scalar=True):
                 dashboard[key] = getattr(result, key)
 
         core = dashboard.get("core_conclusion")
         if not isinstance(core, dict):
             core = {}
             dashboard["core_conclusion"] = core
-        if self._is_agent_field_missing(core.get("one_sentence")):
+        if self._is_agent_field_missing(core.get("one_sentence"), scalar=True):
             core["one_sentence"] = result.analysis_summary or self._summary_fallback_from_result(
                 result,
                 report_language,
@@ -1196,7 +1243,7 @@ class StockAnalysisPipeline:
             if not isinstance(sniper_points, dict):
                 sniper_points = {}
                 battle["sniper_points"] = sniper_points
-            if self._is_agent_field_missing(sniper_points.get("stop_loss")):
+            if self._is_agent_field_missing(sniper_points.get("stop_loss"), scalar=True):
                 sniper_points["stop_loss"] = self._stop_loss_fallback_from_trend(
                     trend_result,
                     report_language,
