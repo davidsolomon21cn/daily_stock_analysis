@@ -4,7 +4,7 @@
 # ===================================
 #
 # 使用方法：
-#   ./test.sh [测试场景]
+#   ./scripts/test.sh [测试场景]
 #
 # 测试场景：
 #   market      - 仅大盘复盘
@@ -20,12 +20,16 @@
 #   all         - 运行所有测试
 #
 # 示例：
-#   ./test.sh market      # 测试大盘复盘
-#   ./test.sh us-stock    # 测试美股分析
-#   ./test.sh quick       # 快速测试
+#   ./scripts/test.sh market      # 测试大盘复盘
+#   ./scripts/test.sh us-stock    # 测试美股分析
+#   ./scripts/test.sh quick       # 快速测试
 #
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "$REPO_ROOT"
 
 # 颜色定义
 RED='\033[0;31m'
