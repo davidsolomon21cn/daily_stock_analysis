@@ -354,6 +354,7 @@ Add these Secrets:
 |------------|------|------|
 | `ANSPIRE_API_KEYS` | Anspire Open API Key (one key for LLM and search) | Recommended |
 | `AIHUBMIX_KEY` | AIHubMix API Key (one key for multiple model families) | Recommended |
+| `ANTHROPIC_API_KEY` | Anthropic API Key | Optional |
 | `GEMINI_API_KEY` | Gemini AI API Key | Optional |
 | `OPENAI_API_KEY` | OpenAI-compatible API Key | Optional |
 | `WECHAT_WEBHOOK_URL` | WeChat Work Bot Webhook | Optional* |

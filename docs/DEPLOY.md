@@ -396,6 +396,7 @@ git push -u origin main
 |------------|------|------|
 | `ANSPIRE_API_KEYS` | Anspire Open API Key（一 Key 启用大模型与搜索） | 推荐 |
 | `AIHUBMIX_KEY` | AIHubMix API Key（一 Key 多模型） | 推荐 |
+| `ANTHROPIC_API_KEY` | Anthropic API Key | 可选 |
 | `GEMINI_API_KEY` | Gemini AI API Key | 可选 |
 | `OPENAI_API_KEY` | OpenAI 兼容 API Key | 可选 |
 | `WECHAT_WEBHOOK_URL` | 企业微信机器人 Webhook | 可选* |
