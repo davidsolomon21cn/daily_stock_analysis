@@ -89,6 +89,10 @@ Web 设置页展示的 provider 能力标签、官方来源链接和配置注意
 5. 非 OpenAI Compatible 渠道（或 /models 不可用渠道）可手动填模型，不影响保存；
 6. 遇错先根据“常见错误”修复，再回头用“测试连接”确认闭环。
 
+## 连接测试与能力 smoke 边界
+
+“测试连接”只用于确认鉴权与最小聊天请求是否可达；JSON、tools、stream、vision 等 runtime capability smoke 属于 best-effort 运行时探测。能力 smoke 会发起真实 LLM 请求，可能产生 token/图片费用，并受限流、余额、超时、region 和模型授权影响。单次 smoke 失败不等于该 provider 全局不支持对应能力，也不会阻止保存配置，更不会写回 `.env`；请结合服务商控制台、官方模型文档和后续实际分析任务再判断生产可用性。
+
 ## 常见错误与处理（快速定位）
 
 | 类别 | 典型报错/现象 | 处理建议 |
