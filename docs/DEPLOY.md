@@ -196,7 +196,7 @@ journalctl -u stock-analyzer -f
 
 | 配置项 | 说明 | 获取方式 |
 |--------|------|----------|
-| `ANSPIRE_API_KEYS` / `AIHUBMIX_KEY` / `GEMINI_API_KEY` / `OPENAI_API_KEY` | AI 模型至少配置一个；推荐优先 Anspire 或 AIHubMix | 对应服务商控制台 |
+| `ANSPIRE_API_KEYS` / `AIHUBMIX_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | AI 模型至少配置一个；推荐优先 Anspire 或 AIHubMix | 对应服务商控制台 |
 | `STOCK_LIST` | 自选股列表 | 逗号分隔的股票代码 |
 | 通知渠道 | 至少配置一个，如企业微信、飞书、Telegram 或邮件 | 对应通知平台 |
 
@@ -408,7 +408,6 @@ git push -u origin main
 | `SERVERCHAN3_SENDKEY` | Server酱³ Sendkey | 可选* |
 | `CUSTOM_WEBHOOK_URLS` | 自定义 Webhook（多个逗号分隔） | 可选* |
 | `STOCK_LIST` | 自选股列表，如 `600519,300750` | ✅ |
-| `ANSPIRE_API_KEYS` | Anspire Open API Key（大模型与搜索共用） | 推荐 |
 | `SERPAPI_API_KEYS` | SerpAPI Key | 推荐 |
 | `TAVILY_API_KEYS` | Tavily 搜索 API Key | 可选 |
 | `BOCHA_API_KEYS` | 博查搜索 API Key | 可选 |
