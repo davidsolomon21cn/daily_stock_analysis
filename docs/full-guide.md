@@ -55,6 +55,8 @@ daily_stock_analysis/
 
 #### AI 模型配置（至少配置一个）
 
+> 提示：以下配置说明主要用于同步和说明现有运行时能力的官方口径与兼容边界，本次更新为文档同步，不代表新增运行时能力实现。
+
 | Secret 名称 | 说明 | 必填 |
 |------------|------|:----:|
 | `ANSPIRE_API_KEYS` | [Anspire](https://open.anspire.cn/?share_code=QFBC0FYC) API Key，一 Key 同时启用大模型和中文优化联网搜索，含本项目免费额度 | 推荐 |

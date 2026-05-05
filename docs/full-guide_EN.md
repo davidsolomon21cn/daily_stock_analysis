@@ -55,6 +55,8 @@ Go to your forked repo → `Settings` → `Secrets and variables` → `Actions` 
 
 #### AI Model Configuration (Configure at Least One)
 
+> Note: The configuration below documents existing runtime provider support and compatibility boundaries; this update is documentation-alignment only and does not introduce new runtime implementation.
+
 | Secret Name | Description | Required |
 |------------|------|:----:|
 | `ANSPIRE_API_KEYS` | [Anspire](https://open.anspire.cn/?share_code=QFBC0FYC) API key, one key for popular LLMs and Chinese-optimized web search with free quota for this project | Recommended |
