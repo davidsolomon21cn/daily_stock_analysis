@@ -591,6 +591,39 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result.operation_advice, "买入")
         self.assertEqual(result.decision_type, "buy")
 
+    def test_convert_empty_top_level_advice_uses_nested_dashboard_advice(self):
+        """Empty top-level advice dict should not block nested dashboard fallback."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.enums import ReportType
+
+        agent_result = AgentResult(
+            success=True,
+            content="{}",
+            dashboard={
+                "operation_advice": {},
+                "dashboard": {
+                    "operation_advice": "减仓",
+                    "trend_prediction": "看空",
+                    "sentiment_score": 42,
+                },
+            },
+            provider="gemini",
+        )
+
+        result = pipeline._agent_result_to_analysis_result(
+            agent_result,
+            "600519",
+            "贵州茅台",
+            ReportType.SIMPLE,
+            "q-nested-advice",
+        )
+
+        self.assertEqual(result.operation_advice, "减仓")
+        self.assertEqual(result.decision_type, "sell")
+        self.assertEqual(result.dashboard["operation_advice"], "减仓")
+
     def test_convert_malformed_scalar_fields_fallback_to_trend_result(self):
         """Malformed non-scalar scalar fields should not be treated as valid values."""
         pipeline = self._make_pipeline()

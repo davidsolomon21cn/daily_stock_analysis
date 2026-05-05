@@ -1100,7 +1100,7 @@ class StockAnalysisPipeline:
         allow_dict: bool = False,
     ) -> bool:
         if scalar and isinstance(value, dict):
-            return not allow_dict
+            return not allow_dict or not value
         if value is None:
             return True
         if isinstance(value, str):
