@@ -987,21 +987,18 @@ class StockAnalysisPipeline:
             raw_decision = self._agent_dashboard_value(dash, nested_dashboard, "decision_type")
             if self._is_agent_field_missing(raw_decision):
                 trend_decision = self._trend_decision_fallback(trend_result)
-                if isinstance(raw_advice, dict):
-                    inferred = infer_decision_type_from_advice(
-                        result.operation_advice,
-                        default="",
-                    )
-                    result.decision_type = inferred or (trend_decision or "hold")
-                    used_trend_decision = not inferred and not extracted_advice and bool(trend_decision)
+                decision_from_advice = infer_decision_type_from_advice(
+                    result.operation_advice,
+                    default="",
+                )
+                if decision_from_advice:
+                    result.decision_type = decision_from_advice
+                    if self._is_agent_field_missing(raw_advice) and not extracted_advice and trend_decision:
+                        self._mark_trend_fallback_source(result)
                 else:
-                    result.decision_type = trend_decision or infer_decision_type_from_advice(
-                        result.operation_advice,
-                        default="hold",
-                    )
-                    used_trend_decision = bool(trend_decision)
-                if used_trend_decision:
-                    self._mark_trend_fallback_source(result)
+                    result.decision_type = trend_decision or "hold"
+                    if trend_decision:
+                        self._mark_trend_fallback_source(result)
             else:
                 result.decision_type = normalize_decision_signal(raw_decision)
             result.confidence_level = localize_confidence_level(

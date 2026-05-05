@@ -241,6 +241,22 @@ class TestApplyPlaceholderFill(unittest.TestCase):
         apply_placeholder_fill(result, ["analysis_summary"])
         self.assertEqual(result.analysis_summary, "待补充")
 
+    def test_fills_missing_analysis_summary_in_english(self) -> None:
+        """English report should use English placeholder text for missing analysis_summary."""
+        result = AnalysisResult(
+            code="600519",
+            name="MacaoTech",
+            report_language="en",
+            trend_prediction="Bullish",
+            sentiment_score=70,
+            operation_advice="Buy",
+            analysis_summary="",
+            decision_type="buy",
+            dashboard={},
+        )
+        apply_placeholder_fill(result, ["analysis_summary"])
+        self.assertEqual(result.analysis_summary, "TBD")
+
     def test_fills_missing_stop_loss(self) -> None:
         """Placeholder fills stop_loss when missing."""
         result = AnalysisResult(
