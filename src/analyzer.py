@@ -50,6 +50,31 @@ from src.market_context import get_market_role, get_market_guidelines
 logger = logging.getLogger(__name__)
 
 
+def _normalize_risk_warning_values(value: Any) -> List[str]:
+    """Normalize arbitrary risk_warning values into a flat list of text alerts."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        return [text] if text else []
+    if isinstance(value, (list, tuple, set)):
+        normalized: List[str] = []
+        for item in value:
+            normalized.extend(_normalize_risk_warning_values(item))
+        return normalized
+    if isinstance(value, dict):
+        if not value:
+            return []
+        try:
+            dumped = json.dumps(value, ensure_ascii=False)
+            text = dumped.strip()
+        except (TypeError, ValueError):
+            text = str(value).strip()
+        return [text] if text else []
+    text = str(value).strip()
+    return [text] if text else []
+
+
 class _LiteLLMStreamError(RuntimeError):
     """Internal error wrapper that records whether any text was streamed."""
 
@@ -194,8 +219,8 @@ def apply_placeholder_fill(result: "AnalysisResult", missing_fields: List[str]) 
                 intelligence = {}
                 result.dashboard["intelligence"] = intelligence
             if _is_invalid_risk_alerts(intelligence.get("risk_alerts")):
-                risk_warning = (result.risk_warning or "").strip()
-                intelligence["risk_alerts"] = [risk_warning] if risk_warning else []
+                risk_warning_values = _normalize_risk_warning_values(result.risk_warning)
+                intelligence["risk_alerts"] = risk_warning_values
         elif field == "dashboard.battle_plan.sniper_points.stop_loss":
             if not result.dashboard:
                 result.dashboard = {}

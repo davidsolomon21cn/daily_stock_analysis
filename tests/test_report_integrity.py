@@ -7,6 +7,7 @@ Report Engine - Content integrity tests
 Tests for check_content_integrity, apply_placeholder_fill, and retry/placeholder behavior.
 """
 
+import json
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
@@ -320,6 +321,41 @@ class TestApplyPlaceholderFill(unittest.TestCase):
         )
         apply_placeholder_fill(result, ["dashboard.intelligence.risk_alerts"])
         self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], [])
+
+    def test_fills_risk_alerts_when_risk_warning_is_list(self) -> None:
+        """Placeholder handles list risk_warning and flattens valid text values."""
+        result = AnalysisResult(
+            code="600519",
+            name="贵州茅台",
+            trend_prediction="看多",
+            sentiment_score=70,
+            operation_advice="持有",
+            analysis_summary="稳健",
+            decision_type="hold",
+            risk_warning=["回撤风险", "波动加大"],
+            dashboard={"intelligence": {"risk_alerts": ""}},
+        )
+        apply_placeholder_fill(result, ["dashboard.intelligence.risk_alerts"])
+        self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], ["回撤风险", "波动加大"])
+
+    def test_fills_risk_alerts_when_risk_warning_is_dict(self) -> None:
+        """Placeholder serializes dict risk_warning into a string risk alert."""
+        result = AnalysisResult(
+            code="600519",
+            name="贵州茅台",
+            trend_prediction="看多",
+            sentiment_score=70,
+            operation_advice="持有",
+            analysis_summary="稳健",
+            decision_type="hold",
+            risk_warning={"note": "技术面偏弱"},
+            dashboard={"intelligence": {"risk_alerts": ""}},
+        )
+        apply_placeholder_fill(result, ["dashboard.intelligence.risk_alerts"])
+        self.assertEqual(
+            json.loads(result.dashboard["intelligence"]["risk_alerts"][0]),
+            {"note": "技术面偏弱"},
+        )
 
     def test_fills_stop_loss_when_blank(self) -> None:
         """Placeholder fills stop_loss when blank whitespace."""
