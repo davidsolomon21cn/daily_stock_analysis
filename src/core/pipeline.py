@@ -1178,7 +1178,12 @@ class StockAnalysisPipeline:
         if not isinstance(intelligence, dict):
             intelligence = {}
             dashboard["intelligence"] = intelligence
-        if "risk_alerts" not in intelligence or intelligence.get("risk_alerts") is None:
+        risk_alerts = intelligence.get("risk_alerts")
+        if (
+            "risk_alerts" not in intelligence
+            or self._is_agent_field_missing(risk_alerts)
+            or not isinstance(risk_alerts, list)
+        ):
             risk_factors = getattr(trend_result, "risk_factors", None) or []
             intelligence["risk_alerts"] = list(risk_factors)
 

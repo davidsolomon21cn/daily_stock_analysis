@@ -723,6 +723,48 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result.dashboard["battle_plan"]["sniper_points"]["stop_loss"], 108.5)
         self.assertIn("trend:fallback", result.data_sources)
 
+    def test_convert_risk_alerts_string_placeholder_uses_local_risk_factors(self):
+        """String-like placeholder risk alerts should be replaced with local trend risk factors."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.analyzer import check_content_integrity
+        from src.enums import ReportType
+        from src.stock_analyzer import BuySignal, TrendAnalysisResult, TrendStatus
+
+        agent_result = AgentResult(
+            success=True,
+            content="{}",
+            dashboard={
+                "dashboard": {
+                    "core_conclusion": {"one_sentence": "AI 已给出的核心结论"},
+                    "intelligence": {"risk_alerts": "待补充"},
+                },
+            },
+            provider="gemini",
+        )
+        trend_result = TrendAnalysisResult(
+            code="600519",
+            trend_status=TrendStatus.BULL,
+            buy_signal=BuySignal.BUY,
+            signal_score=66,
+            support_levels=[108.5],
+            risk_factors=["涨幅过快", "回撤放大"],
+        )
+
+        result = pipeline._agent_result_to_analysis_result(
+            agent_result,
+            "600519",
+            "贵州茅台",
+            ReportType.SIMPLE,
+            "q-risk-alerts-string-placeholder",
+            trend_result=trend_result,
+        )
+
+        ok, missing = check_content_integrity(result)
+        self.assertTrue(ok, missing)
+        self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], ["涨幅过快", "回撤放大"])
+
     def test_convert_placeholder_dashboard_is_completed_from_local_context(self):
         """Placeholder dashboard blocks should be completed without falling back to neutral defaults."""
         pipeline = self._make_pipeline()
