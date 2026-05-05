@@ -1177,8 +1177,7 @@ A: 检查是否启用了 Actions，以及 cron 表达式是否正确（注意是
 
 `AGENT_EVENT_MONITOR_ENABLED=true` 后，schedule 模式会按 `AGENT_EVENT_MONITOR_INTERVAL_MINUTES` 轮询 `AGENT_EVENT_ALERT_RULES_JSON` 中的规则，并把触发结果发送到现有通知渠道。当前运行时支持三类规则：
 
-> 兼容与迁移说明：本次仅新增/验证事件告警规则字段（含 `price_change_percent`），不会修改模型名、provider、Base URL、LiteLLM、`OPENAI_*`、`DEEPSEEK_*`、`GEMINI_*` 等外部模型/API 配置语义。若需回退，删除或关闭 `AGENT_EVENT_MONITOR_ENABLED` 即恢复到旧行为。
-> 验证证据在仓库内可直接追踪：`src/agent/events.py`（运行时解析/校验）、`src/services/system_config_service.py`（配置保存与校验）、`src/core/config_registry.py`（配置元数据），以及 `tests/test_multi_agent.py`、`tests/test_system_config_service.py` 的回归断言。
+> 兼容与迁移说明：本节记录当前事件告警规则（含 `price_change_percent`）运行时行为，未变更模型名、provider、Base URL、LiteLLM、`OPENAI_*`、`DEEPSEEK_*`、`GEMINI_*` 等外部模型/API 配置语义。若需回退，删除或关闭 `AGENT_EVENT_MONITOR_ENABLED` 即可恢复到旧行为。
 
 | `alert_type` | 方向字段 | 阈值字段 | 说明 |
 | --- | --- | --- | --- |
