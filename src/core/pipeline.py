@@ -1086,16 +1086,27 @@ class StockAnalysisPipeline:
         for field in ("has_position", "no_position"):
             if isinstance(raw_advice.get(field), str):
                 text = raw_advice[field].strip()
-                if text:
+                if not StockAnalysisPipeline._is_agent_placeholder_text(text):
                     return text
 
         for value in raw_advice.values():
             if isinstance(value, str):
                 text = value.strip()
-                if text:
+                if not StockAnalysisPipeline._is_agent_placeholder_text(text):
                     return text
 
         return ""
+
+    @staticmethod
+    def _is_agent_placeholder_text(text: str) -> bool:
+        if not text:
+            return True
+        return text.lower() in {"n/a", "na", "none", "null", "unknown", "tbd"} or text in {
+            "未知",
+            "待补充",
+            "数据缺失",
+            "无",
+        }
 
     @staticmethod
     def _is_agent_field_missing(
@@ -1105,19 +1116,14 @@ class StockAnalysisPipeline:
         allow_dict: bool = False,
     ) -> bool:
         if scalar and isinstance(value, dict):
-            return not allow_dict or not value
+            if not allow_dict or not value:
+                return True
+            return not StockAnalysisPipeline._extract_advice_text_from_dict(value)
         if value is None:
             return True
         if isinstance(value, str):
             text = value.strip()
-            if not text:
-                return True
-            return text.lower() in {"n/a", "na", "none", "null", "unknown", "tbd"} or text in {
-                "未知",
-                "待补充",
-                "数据缺失",
-                "无",
-            }
+            return StockAnalysisPipeline._is_agent_placeholder_text(text)
         if isinstance(value, dict):
             if scalar:
                 return not allow_dict

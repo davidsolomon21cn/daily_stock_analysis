@@ -624,6 +624,42 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result.decision_type, "sell")
         self.assertEqual(result.dashboard["operation_advice"], "减仓")
 
+    def test_convert_placeholder_top_level_advice_uses_nested_dashboard_advice(self):
+        """Placeholder advice dict should not block nested dashboard fallback."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.enums import ReportType
+
+        agent_result = AgentResult(
+            success=True,
+            content="{}",
+            dashboard={
+                "operation_advice": {
+                    "has_position": "待补充",
+                    "no_position": "TBD",
+                },
+                "dashboard": {
+                    "operation_advice": "减仓",
+                    "trend_prediction": "看空",
+                    "sentiment_score": 42,
+                },
+            },
+            provider="gemini",
+        )
+
+        result = pipeline._agent_result_to_analysis_result(
+            agent_result,
+            "600519",
+            "贵州茅台",
+            ReportType.SIMPLE,
+            "q-placeholder-advice",
+        )
+
+        self.assertEqual(result.operation_advice, "减仓")
+        self.assertEqual(result.decision_type, "sell")
+        self.assertEqual(result.dashboard["operation_advice"], "减仓")
+
     def test_convert_malformed_top_level_summary_uses_nested_dashboard_summary(self):
         """Malformed top-level analysis_summary should not block nested dashboard fallback."""
         pipeline = self._make_pipeline()
