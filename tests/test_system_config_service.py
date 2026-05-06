@@ -55,6 +55,17 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         message = SimpleNamespace(content=content, tool_calls=tool_calls or [])
         return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
+    def test_upstream_request_block_signal_matches_exact_reproducible_text(self) -> None:
+        self.assertTrue(
+            SystemConfigService._has_upstream_request_block_signal("litellm.APIError: APIError: OpenAIException - Your request was blocked.")
+        )
+        self.assertFalse(
+            SystemConfigService._has_upstream_request_block_signal("Request blocked by content policy.")
+        )
+        self.assertFalse(
+            SystemConfigService._has_upstream_request_block_signal("Request was blocked by risk control.")
+        )
+
     def test_get_config_returns_raw_sensitive_values(self) -> None:
         payload = self.service.get_config(include_schema=True)
         items = {item["key"]: item for item in payload["items"]}

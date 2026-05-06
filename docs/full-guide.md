@@ -218,7 +218,7 @@ daily_stock_analysis/
 
 > *注：`ANSPIRE_API_KEYS`、`AIHUBMIX_KEY`、`GEMINI_API_KEY`、`ANTHROPIC_API_KEY`、`OPENAI_API_KEY` 或 `OLLAMA_API_BASE` 至少配置一个。`ANSPIRE_API_KEYS` 与 `AIHUBMIX_KEY` 无需配置 `OPENAI_BASE_URL`，系统自动适配。
 
-> 第三方代理 / 聚合平台出现 `OpenAIException - Your request was blocked` 时，通常是上游账号权限、模型权限或风控拦截，不是本地网络断开。请确认 Base URL 是 OpenAI-compatible 接口地址（通常带 `/v1`，不要手动拼 `/chat/completions`）、模型名与代理商控制台完全一致，且不要混用 `ANSPIRE_API_KEYS`、`AIHUBMIX_KEY`、`GEMINI_API_KEY` 与其他代理商的 Base URL / 模型。
+> 当出现 `OpenAIException - Your request was blocked` 时，系统仅在报错文本出现 `Your request was blocked` 精确匹配时，按上游账号权限/模型权限类诊断提示；`content policy` / `risk control` 等文本暂不归入该类。请确认 Base URL 是 OpenAI-compatible 接口地址（通常带 `/v1`，不要手动拼 `/chat/completions`）、模型名与代理商控制台完全一致，且不要混用 `ANSPIRE_API_KEYS`、`AIHUBMIX_KEY`、`GEMINI_API_KEY` 与其他代理商的 Base URL / 模型。相关官方来源：LiteLLM OpenAI-Compatible 语义 <https://docs.litellm.ai/docs/providers/openai_compatible>，OpenAI API Error codes <https://platform.openai.com/docs/guides/error-codes>。
 
 ### 通知渠道配置
 

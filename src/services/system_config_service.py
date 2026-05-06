@@ -2241,15 +2241,6 @@ class SystemConfigService:
         lowered = text.lower()
         blocked_tokens = (
             "your request was blocked",
-            "request was blocked",
-            "request is blocked",
-            "request blocked",
-            "blocked by upstream",
-            "blocked by provider",
-            "blocked by policy",
-            "blocked by risk",
-            "risk control",
-            "content policy",
         )
         return any(token in lowered for token in blocked_tokens)
 
