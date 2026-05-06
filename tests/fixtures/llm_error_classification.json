@@ -1,0 +1,24 @@
+{
+  "model_access_denied": [
+    {
+      "message": "model gpt-4o is not authorized for this account",
+      "source_hint": "provider-auth-model"
+    },
+    {
+      "message": "litellm.APIError: APIError: OpenAIException - Model disabled.",
+      "source_hint": "litellm-provider-response"
+    },
+    {
+      "message": "Model is disabled for this account",
+      "source_hint": "provider-runtime-model-state"
+    },
+    {
+      "message": "model is disabled for this organization",
+      "source_hint": "provider-runtime-model-state"
+    },
+    {
+      "message": "Model disabled",
+      "source_hint": "provider-runtime-model-state"
+    }
+  ]
+}

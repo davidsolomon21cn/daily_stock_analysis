@@ -2,6 +2,7 @@
 """Unit tests for system configuration service."""
 
 import os
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +12,10 @@ from unittest.mock import Mock, patch
 from tests.litellm_stub import ensure_litellm_stub
 
 ensure_litellm_stub()
+
+_MODEL_CLASSIFICATION_FIXTURE = Path(__file__).resolve().with_name("fixtures").joinpath("llm_error_classification.json")
+with _MODEL_CLASSIFICATION_FIXTURE.open(encoding="utf-8") as _fixture_file:
+    _LLM_ERROR_CLASSIFICATION_FIXTURES = json.load(_fixture_file)
 
 from src.config import ANSPIRE_LLM_MODEL_DEFAULT, Config
 from src.core.config_manager import ConfigManager
@@ -1270,6 +1275,27 @@ class SystemConfigServiceTestCase(unittest.TestCase):
                     self.assertFalse(payload["retryable"])
                     self.assertEqual(payload["details"]["model"], "openai/gpt-4o-mini")
                     self.assertEqual(payload["resolved_model"], "openai/gpt-4o-mini")
+
+    @patch("litellm.completion")
+    def test_test_llm_channel_classifies_model_access_denied_cases_from_fixture(self, mock_completion) -> None:
+        for sample in _LLM_ERROR_CLASSIFICATION_FIXTURES["model_access_denied"]:
+            with self.subTest(message=sample["message"]):
+                mock_completion.reset_mock()
+                mock_completion.side_effect = Exception(sample["message"])
+                payload = self.service.test_llm_channel(
+                    name="primary",
+                    protocol="openai",
+                    base_url="https://api.example.com/v1",
+                    api_key="sk-test-value",
+                    models=["gpt-4o-mini"],
+                )
+
+                self.assertFalse(payload["success"])
+                self.assertEqual(payload["error_code"], "model_access_denied")
+                self.assertEqual(payload["details"]["reason"], "model_access_denied")
+                self.assertFalse(payload["retryable"])
+                self.assertEqual(payload["details"]["model"], "openai/gpt-4o-mini")
+                self.assertEqual(payload["resolved_model"], "openai/gpt-4o-mini")
 
     def test_test_llm_channel_reports_comma_only_api_key_as_missing(self) -> None:
         payload = self.service.test_llm_channel(
