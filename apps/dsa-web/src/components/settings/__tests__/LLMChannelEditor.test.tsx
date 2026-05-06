@@ -942,6 +942,49 @@ describe('LLMChannelEditor', () => {
     expect(screen.getByText(/请检查 API Key 是否正确/i)).toBeInTheDocument();
   });
 
+  it('shows the tested model and model access hint when a model is disabled', async () => {
+    testLLMChannel.mockResolvedValue({
+      success: false,
+      message: 'LLM channel test failed',
+      error: 'litellm.APIError: APIError: OpenAIException - Model disabled.',
+      errorCode: 'model_access_denied',
+      stage: 'chat_completion',
+      retryable: false,
+      details: { reason: 'model_access_denied', model: 'openai/deepseek-ai/DeepSeek-V3' },
+      resolvedProtocol: 'openai',
+      resolvedModel: 'openai/deepseek-ai/DeepSeek-V3',
+      latencyMs: null,
+    });
+
+    render(
+      <LLMChannelEditor
+        items={[
+          { key: 'LLM_CHANNELS', value: 'siliconflow' },
+          { key: 'LLM_SILICONFLOW_PROTOCOL', value: 'openai' },
+          { key: 'LLM_SILICONFLOW_BASE_URL', value: 'https://api.siliconflow.cn/v1' },
+          { key: 'LLM_SILICONFLOW_ENABLED', value: 'true' },
+          { key: 'LLM_SILICONFLOW_API_KEY', value: 'secret-key' },
+          { key: 'LLM_SILICONFLOW_MODELS', value: 'deepseek-ai/DeepSeek-V3,Qwen/Qwen3-Coder' },
+        ]}
+        configVersion="v1"
+        maskToken="******"
+        onSaved={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /siliconflow/i }));
+    fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+
+    expect(await screen.findByText(/聊天调用 · 模型不可用：LLM channel test failed/i)).toBeInTheDocument();
+    expect(screen.getByText(/本次测试模型：openai\/deepseek-ai\/DeepSeek-V3/)).toBeInTheDocument();
+    expect(screen.getByText(/基础连接测试默认只测试模型列表中的第一个模型/)).toBeInTheDocument();
+    expect(screen.getByText(/服务商控制台确认模型开通状态/)).toBeInTheDocument();
+    expect(screen.queryByText(/Base URL、代理、TLS/)).not.toBeInTheDocument();
+    expect(testLLMChannel).toHaveBeenCalledWith(expect.objectContaining({
+      models: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen3-Coder'],
+    }));
+  });
+
   it('shows focused quota exceeded troubleshooting hints', async () => {
     testLLMChannel.mockResolvedValue({
       success: false,

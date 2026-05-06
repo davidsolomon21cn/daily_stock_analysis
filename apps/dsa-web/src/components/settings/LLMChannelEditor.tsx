@@ -703,6 +703,7 @@ const LLM_ERROR_LABELS: Record<string, string> = {
   auth: '鉴权失败',
   timeout: '请求超时',
   quota: '额度或限流',
+  model_access_denied: '模型不可用',
   model_not_found: '模型不存在',
   empty_response: '空响应',
   format_error: '格式异常',
@@ -717,6 +718,7 @@ const LLM_TROUBLESHOOTING_HINTS: Record<string, string> = {
   auth: '请检查 API Key 是否正确、是否有多余空格，以及当前渠道是否需要额外组织/项目权限。',
   timeout: '可重试；若持续超时，请检查 Base URL、网络代理、服务商可用区或本地防火墙。',
   quota: '请检查余额、套餐额度、RPM/TPM 限流或并发设置，必要时稍后重试。',
+  model_access_denied: '当前账号无法使用该模型；请在服务商控制台确认模型开通状态，或从模型列表中移除该模型后重试。',
   model_not_found: '请确认模型名与渠道协议匹配，并先用“获取模型”核对该渠道实际可用模型列表。',
   empty_response: '渠道已连通但未返回正文；可尝试切换兼容模型、关闭额外响应模式后再测试。',
   network_error: '请检查 Base URL、代理、TLS/证书、中转网关或本地网络策略，并可稍后重试。',
@@ -733,7 +735,7 @@ const LLM_REASON_HINTS: Record<string, string> = {
   dns_error: '域名解析失败；请检查 Base URL 域名、网络代理和 DNS 配置。',
   tls_error: 'TLS/证书握手失败；请检查 HTTPS 证书、中转网关或公司代理策略。',
   connection_refused: '目标服务拒绝连接；请确认 Base URL 端口、服务进程和防火墙配置。',
-  model_access_denied: '当前账号没有访问该模型的权限；请在服务商控制台确认模型开通状态。',
+  model_access_denied: '当前账号无法使用该模型；请在服务商控制台确认模型开通状态，或从模型列表中移除该模型后重试。',
   provider_prefix_mismatch: '模型 provider 前缀与当前渠道不匹配；请确认模型名是否应使用该渠道的 OpenAI-compatible 路由。',
   capability_unsupported: '当前模型或兼容层不支持该能力；这不影响基础文本连接，可换模型或关闭该能力依赖。',
 };
@@ -765,6 +767,20 @@ function getLlmTroubleshootingHint(
     return '该渠道的 /models 接口未返回可用模型 ID；请检查 Base URL 是否指向兼容的模型列表接口，或改为手动填写模型列表。';
   }
   return LLM_TROUBLESHOOTING_HINTS[code || ''];
+}
+
+function buildLlmTestHint(result: {
+  errorCode?: string | null;
+  stage?: string | null;
+  details?: Record<string, unknown>;
+  resolvedModel?: string | null;
+}): string {
+  const troubleshootingHint = getLlmTroubleshootingHint(result.errorCode, result.stage, 'test', result.details);
+  const detailsModel = typeof result.details?.model === 'string' ? result.details.model : undefined;
+  const resolvedModel = result.resolvedModel || detailsModel;
+  const scopeHint = '基础连接测试默认只测试模型列表中的第一个模型；若该模型不可用，请调整模型顺序或移除不可用模型后重试。';
+  const modelHint = resolvedModel ? `本次测试模型：${resolvedModel}。` : '';
+  return [modelHint ? `${modelHint}${scopeHint}` : scopeHint, troubleshootingHint].filter(Boolean).join(' ');
 }
 
 function buildLlmFailureText(result: {
@@ -1339,7 +1355,7 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
       const text = result.success
         ? `连接成功${result.resolvedModel ? ` · ${result.resolvedModel}` : ''}${result.latencyMs ? ` · ${result.latencyMs} ms` : ''}`
         : buildLlmFailureText(result);
-      const hint = result.success ? undefined : getLlmTroubleshootingHint(result.errorCode, result.stage, 'test', result.details);
+      const hint = result.success ? undefined : buildLlmTestHint(result);
 
       setTestStates((previous) => ({
         ...previous,

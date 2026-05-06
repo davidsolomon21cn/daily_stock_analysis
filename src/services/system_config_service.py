@@ -2142,9 +2142,9 @@ class SystemConfigService:
     @staticmethod
     def _classify_llm_http_error(status_code: int, error_text: str) -> _LLMDiagnostic:
         lowered = (error_text or "").lower()
-        if "model" in lowered and any(token in lowered for token in ("not authorized", "not allowed", "access denied", "permission denied")):
+        if SystemConfigService._has_model_access_denied_signal(lowered):
             return _LLMDiagnostic(
-                "model_not_found",
+                "model_access_denied",
                 False,
                 "Configured model is not available for this channel",
                 "model_access_denied",
@@ -2217,6 +2217,30 @@ class SystemConfigService:
         return False
 
     @staticmethod
+    def _has_model_access_denied_signal(text: str) -> bool:
+        lowered = text.lower()
+        if "model" not in lowered:
+            return False
+
+        return any(
+            token in lowered
+            for token in (
+                "not authorized",
+                "not allowed",
+                "access denied",
+                "permission denied",
+                "model disabled",
+                "model is disabled",
+                "disabled model",
+                "model has been disabled",
+                "model not enabled",
+                "not available for",
+                "not available to",
+                "no permission",
+            )
+        )
+
+    @staticmethod
     def _has_provider_prefix_mismatch_signal(text: str) -> bool:
         lowered = text.lower()
         mismatch_tokens = (
@@ -2263,9 +2287,9 @@ class SystemConfigService:
                 "Configured model prefix does not match this channel",
                 "provider_prefix_mismatch",
             )
-        if "model" in text and any(token in text for token in ("not authorized", "not allowed", "access denied", "permission denied")):
+        if SystemConfigService._has_model_access_denied_signal(text):
             return _LLMDiagnostic(
-                "model_not_found",
+                "model_access_denied",
                 False,
                 "Configured model is not available for this channel",
                 "model_access_denied",
