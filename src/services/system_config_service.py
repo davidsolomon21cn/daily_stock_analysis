@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
-from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse
 
 import requests
 
@@ -297,7 +297,7 @@ class SystemConfigService:
         api_key: str,
         models: Sequence[str] = (),
         timeout_seconds: float = 20.0,
-        ) -> Dict[str, Any]:
+    ) -> Dict[str, Any]:
         """Discover available models from an OpenAI-compatible `/models` endpoint."""
         channel_name = name.strip() or "channel"
         existing_models = [str(m).strip() for m in models if str(m).strip()]
@@ -2142,6 +2142,13 @@ class SystemConfigService:
     @staticmethod
     def _classify_llm_http_error(status_code: int, error_text: str) -> _LLMDiagnostic:
         lowered = (error_text or "").lower()
+        if SystemConfigService._has_upstream_request_block_signal(lowered):
+            return _LLMDiagnostic(
+                "auth",
+                False,
+                "LLM request was blocked by upstream provider policy",
+                "upstream_request_blocked",
+            )
         if "model" in lowered and any(token in lowered for token in ("not authorized", "not allowed", "access denied", "permission denied")):
             return _LLMDiagnostic(
                 "model_not_found",
@@ -2230,6 +2237,23 @@ class SystemConfigService:
         return any(token in lowered for token in mismatch_tokens)
 
     @staticmethod
+    def _has_upstream_request_block_signal(text: str) -> bool:
+        lowered = text.lower()
+        blocked_tokens = (
+            "your request was blocked",
+            "request was blocked",
+            "request is blocked",
+            "request blocked",
+            "blocked by upstream",
+            "blocked by provider",
+            "blocked by policy",
+            "blocked by risk",
+            "risk control",
+            "content policy",
+        )
+        return any(token in lowered for token in blocked_tokens)
+
+    @staticmethod
     def _classify_llm_exception(exc: Exception) -> _LLMDiagnostic:
         exc_name = type(exc).__name__.lower()
         text = str(exc).lower()
@@ -2255,6 +2279,13 @@ class SystemConfigService:
                 True,
                 "LLM request was rejected by quota or rate limiting",
                 "rate_limit",
+            )
+        if SystemConfigService._has_upstream_request_block_signal(text):
+            return _LLMDiagnostic(
+                "auth",
+                False,
+                "LLM request was blocked by upstream provider policy",
+                "upstream_request_blocked",
             )
         if SystemConfigService._has_provider_prefix_mismatch_signal(text):
             return _LLMDiagnostic(

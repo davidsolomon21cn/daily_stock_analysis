@@ -194,6 +194,8 @@ Default schedule: Every weekday at **18:00 (Beijing Time)** automatic execution.
 
 > *Note: Configure at least one of `ANSPIRE_API_KEYS`, `AIHUBMIX_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_API_BASE`, or `LLM_CHANNELS` / `LITELLM_CONFIG`. `ANSPIRE_API_KEYS` and `AIHUBMIX_KEY` are auto-adapted without an `OPENAI_BASE_URL`.
 
+> When a third-party relay / aggregator returns `OpenAIException - Your request was blocked`, it is usually an upstream account permission, model entitlement, or risk-control block rather than a local network outage. Confirm the Base URL is the provider's OpenAI-compatible endpoint (usually ending in `/v1`, without manually appending `/chat/completions`), the model name exactly matches the provider console, and `ANSPIRE_API_KEYS`, `AIHUBMIX_KEY`, `GEMINI_API_KEY` are not mixed with another relay's Base URL / model.
+
 ### Notification Channel Configuration
 
 For the P0 notification baseline and diagnostics, see [Notification Baseline](notifications.md).

@@ -197,8 +197,9 @@ class SystemConfigServiceTestCase(unittest.TestCase):
                 "STOCK_LIST": "600519",
             },
             clear=True,
-        ), patch("src.services.system_config_service.Config.reset_instance") as mock_reset, \
-             patch("src.services.system_config_service.setup_env") as mock_setup_env:
+        ), patch(
+            "src.services.system_config_service.Config.reset_instance"
+        ) as mock_reset, patch("src.services.system_config_service.setup_env") as mock_setup_env:
             status = self.service.get_setup_status()
 
         self.assertTrue(status["is_complete"])
@@ -1249,6 +1250,11 @@ class SystemConfigServiceTestCase(unittest.TestCase):
             (Exception("Connection refused"), "network_error", "connection_refused"),
             (Exception("model gpt-4o is not authorized for this account"), "model_not_found", "model_access_denied"),
             (Exception("LLM Provider NOT provided for model foo"), "model_not_found", "provider_prefix_mismatch"),
+            (
+                Exception("litellm.APIError: APIError: OpenAIException - Your request was blocked."),
+                "auth",
+                "upstream_request_blocked",
+            ),
         ]
 
         for exc, error_code, reason in cases:
@@ -1319,6 +1325,8 @@ class SystemConfigServiceTestCase(unittest.TestCase):
     def test_discover_llm_channel_models_classifies_error_scenarios(self, mock_get) -> None:
         auth_response = Mock(ok=False, status_code=401, text="invalid api key sk-secret-value")
         auth_response.json.return_value = {"error": {"message": "invalid api key sk-secret-value"}}
+        blocked_response = Mock(ok=False, status_code=403, text="Your request was blocked.")
+        blocked_response.json.return_value = {"error": {"message": "Your request was blocked."}}
         not_found_response = Mock(ok=False, status_code=404, text="not found")
         not_found_response.json.return_value = {"error": {"message": "not found"}}
         billing_response = Mock(ok=False, status_code=402, text="account balance insufficient")
@@ -1334,6 +1342,7 @@ class SystemConfigServiceTestCase(unittest.TestCase):
 
         for response, error_code, stage, retryable, reason in [
             (auth_response, "auth", "model_discovery", False, "api_key_rejected"),
+            (blocked_response, "auth", "model_discovery", False, "upstream_request_blocked"),
             (not_found_response, "network_error", "model_discovery", False, "endpoint_not_found"),
             (billing_response, "quota", "model_discovery", True, "insufficient_balance"),
             (billing_rate_limit_response, "quota", "model_discovery", True, "insufficient_balance"),
@@ -1617,7 +1626,6 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         self.assertEqual(restored_map["AGENT_LITELLM_MODEL"], pre_clear_map["AGENT_LITELLM_MODEL"])
         self.assertEqual(restored_map["VISION_MODEL"], pre_clear_map["VISION_MODEL"])
         self.assertEqual(restored_map["LITELLM_FALLBACK_MODELS"], pre_clear_map["LITELLM_FALLBACK_MODELS"])
-
 
     def test_validate_rejects_comma_only_api_key(self) -> None:
         """Whitespace/comma-only api_key must fail validation (P2: parsed-segment check)."""
